@@ -12,7 +12,17 @@ def generate_launch_description():
     launch_imu_arg = DeclareLaunchArgument(
         'launch_imu',
         default_value='true',
-        description='Whether to launch the BMI088 IMU node'
+        description='Whether to launch the IMU node'
+    )
+    imu_type_arg = DeclareLaunchArgument(
+        'imu_type',
+        default_value='mpu6500',
+        description='IMU sensor type (mpu6500, bmi088)'
+    )
+    imu_rate_arg = DeclareLaunchArgument(
+        'imu_rate',
+        default_value='100.0',
+        description='IMU publishing rate in Hz'
     )
     launch_camera_arg = DeclareLaunchArgument(
         'launch_camera',
@@ -86,17 +96,23 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('launch_camera'))
     )
 
-    bmi088_node = Node(
+    imu_node = Node(
         package='imu_handler',
-        executable='bmi088_node',
-        name='bmi088_node',
+        executable='imu_node',
+        name='imu_node',
         output='screen',
+        parameters=[{
+            'imu_type': LaunchConfiguration('imu_type'),
+            'rate_hz': ParameterValue(LaunchConfiguration('imu_rate'), value_type=float),
+        }],
         condition=IfCondition(LaunchConfiguration('launch_imu'))
     )
 
     return LaunchDescription([
         # Arguments
         launch_imu_arg,
+        imu_type_arg,
+        imu_rate_arg,
         launch_camera_arg,
         launch_foxglove_arg,
         video_device_arg,
@@ -109,6 +125,6 @@ def generate_launch_description():
         # Nodes
         foxglove_node,
         stereo_camera_node,
-        bmi088_node,
+        imu_node,
     ])
 
