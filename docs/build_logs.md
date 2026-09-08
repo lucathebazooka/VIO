@@ -6,7 +6,7 @@
 * **Operating System:** Ubuntu 24.04 LTS (Noble Numbat)
 * **ROS 2 Distribution:** ROS 2 Jazzy Jalisco
 * **Primary Sensors & Telemetry:**
-  * **IMU:** Bosch BMI088 6-axis IMU (SPI interface) — *Code complete; awaiting replacement unit for physical connection.*
+  * **IMU:** InvenSense MPU-6500 6-axis IMU (SPI interface on `/dev/spidev0.0`, CE0). *Replaced damaged BMI088; modular ROS 2 driver system deployed in `imu_handler` enabling seamless sensor swapping.*
   * **Stereo Camera:** 1MP OV9281 Global Shutter Binocular Synchronous USB Camera (Side-by-side 2560x800 MJPEG stream).
   * **Telemetry & Visualization:** Foxglove Bridge (`ros-jazzy-foxglove-bridge` v3.4.1) for real-time WebSocket telemetry (`ws://192.168.2.4:8765`).
 
@@ -53,22 +53,36 @@ sudo chmod 666 /dev/video* 2>/dev/null || true
 
 ---
 
-## 3. Package 1: BMI088 IMU Handler Node (`imu_handler`)
+## 3. Package 1: Modular IMU Handler Node (`imu_handler`)
 
-### 3.1. Overview & Wiring Plan
-The BMI088 contains independent accelerometer and gyroscope dies requiring distinct Chip Select lines on the Pi 5's SPI bus:
+### 3.1. Hardware Transition, Silicon Diagnostics & Wiring Plan
 
-| BMI088 Breakout Pin | Raspberry Pi 5 Function | Physical Pin # |
-| :--- | :--- | :--- |
-| **VCC / VDD** | 3.3V Power | Pin 1 |
-| **GND** | Ground | Pin 6 |
-| **SCK / SCL** | SPI0 SCLK (GPIO 11) | Pin 23 |
-| **SDI / SDA** | SPI0 MOSI (GPIO 10) | Pin 19 |
-| **SDO** | SPI0 MISO (GPIO 9) | Pin 21 |
-| **CS_ACC / CS1** | SPI0 CE0 (GPIO 8) | Pin 24 |
-| **CS_GYRO / CS2** | SPI0 CE1 (GPIO 7) | Pin 26 |
+The originally intended Bosch BMI088 was damaged and replaced with an **InvenSense MPU-6500** 6-axis IMU. To ensure long-term flexibility, `imu_handler` was refactored into a **modular multi-sensor architecture** allowing drop-in sensor hot-swapping.
 
-### 3.2. ROS 2 Package Structure
+#### Silicon Diagnostics & Verification
+Direct hardware probing on `/dev/spidev0.0` verified:
+* **`WHO_AM_I` (`0x75`):** Returned `0x70` (decimal 112), identifying factory MPU-6500 silicon (distinct from `0x71` for MPU-9250 and `0x73` for MPU-9255).
+* **Magnetometer Probe:** Querying the auxiliary I2C master for an internal AK8963 magnetometer at address `0x0C` returned `I2C_SLV0_NACK` (`0x01`), verifying the absence of an internal compass and confirming genuine 6-DOF MPU-6500 operation.
+* **SPI Communication:** Configured for SPI Mode 0, reading accelerometer and gyroscope at speeds up to 5 MHz.
+
+#### Physical SPI Wiring Comparison
+
+| Function / Signal | Raspberry Pi 5 Header | MPU-6500 (Current) | BMI088 (Legacy / Spare) |
+| :--- | :--- | :--- | :--- |
+| **3.3V Power** | Pin 1 (3V3) | `VCC / 3V3` | `VCC / VDD` |
+| **Ground** | Pin 6 (GND) | `GND` | `GND` |
+| **SPI SCLK** | Pin 23 (GPIO 11) | `SCL / SCK` | `SCK / SCL` |
+| **SPI MOSI** | Pin 19 (GPIO 10) | `SDA / SDI` | `SDI / SDA` |
+| **SPI MISO** | Pin 21 (GPIO 9) | `AD0 / SDO` | `SDO` |
+| **SPI Chip Select 1** | Pin 24 (GPIO 8 / CE0) | `NCS / CS` | `CS_ACC / CS1` |
+| **SPI Chip Select 2** | Pin 26 (GPIO 7 / CE1) | *Not used* | `CS_GYRO / CS2` |
+
+> [!NOTE]
+> Unlike the BMI088 which requires two separate chip select lines (dual dies), the MPU-6500 utilizes a single chip select pin on `SPI0 CE0`.
+
+---
+
+### 3.2. Modular ROS 2 Package Structure
 
 ```text
 ros2_ws/src/imu_handler/
@@ -77,155 +91,54 @@ ros2_ws/src/imu_handler/
 ├── setup.py
 └── imu_handler/
     ├── __init__.py
-    └── bmi088_node.py
+    ├── base_driver.py       # Abstract IMU interface
+    ├── mpu6500_driver.py    # High-rate MPU-6500 SPI driver (burst 14-byte reads)
+    ├── bmi088_driver.py     # BMI088 SPI driver
+    ├── imu_node.py          # Unified modular ROS 2 node (param-driven)
+    └── bmi088_node.py       # Standalone/legacy backward compatibility node
 ```
 
-### 3.3. Node Source Code (`bmi088_node.py`)
+---
 
+### 3.3. Driver Implementation Highlights
+
+#### 1. Abstract Base Class (`base_driver.py`)
+Defines the common sensor interface contract:
 ```python
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Imu
-import spidev
-import time
-import struct
-
-# BMI088 Registers & Constants
-ACC_ADDR_CHIP_ID = 0x00
-ACC_PWR_CONF = 0x7C
-ACC_PWR_CTRL = 0x7D
-ACC_DATA_START = 0x12
-
-GYRO_ADDR_CHIP_ID = 0x00
-GYRO_DATA_START = 0x02
-
-G_TO_MS2 = 9.80665
-DEG_TO_RAD = 0.017453292519943295
-
-
-class BMI088Driver:
-    def __init__(self, bus=0, cs_acc=0, cs_gyro=1):
-        # Accelerometer SPI connection
-        self.spi_acc = spidev.SpiDev()
-        self.spi_acc.open(bus, cs_acc)
-        self.spi_acc.max_speed_hz = 5000000
-        self.spi_acc.mode = 0
-
-        # Gyroscope SPI connection
-        self.spi_gyro = spidev.SpiDev()
-        self.spi_gyro.open(bus, cs_gyro)
-        self.spi_gyro.max_speed_hz = 5000000
-        self.spi_gyro.mode = 0
-
-        self._init_sensor()
-
-    def _write_reg(self, spi, reg, val):
-        # SPI Write: MSB is 0
-        spi.xfer2([reg & 0x7F, val])
-
-    def _read_regs(self, spi, reg, length, is_acc=False):
-        # SPI Read: MSB is 1
-        # BMI088 Accel requires a dummy byte during SPI reads
-        header = (reg | 0x80)
-        if is_acc:
-            tx = [header, 0x00] + [0x00] * length
-            rx = spi.xfer2(tx)
-            return rx[2:]
-        else:
-            tx = [header] + [0x00] * length
-            rx = spi.xfer2(tx)
-            return rx[1:]
-
-    def _init_sensor(self):
-        # Dummy read to switch Accel into SPI mode
-        self._read_regs(self.spi_acc, ACC_ADDR_CHIP_ID, 1, is_acc=True)
-        time.sleep(0.01)
-
-        # Turn on Accelerometer
-        self._write_reg(self.spi_acc, ACC_PWR_CONF, 0x00)  # Active mode
-        time.sleep(0.01)
-        self._write_reg(self.spi_acc, ACC_PWR_CTRL, 0x0E)  # Accel power on
-        time.sleep(0.05)
-
-    def read_accel(self):
-        # Read 6 bytes of accel data (X, Y, Z)
-        data = self._read_regs(self.spi_acc, ACC_DATA_START, 6, is_acc=True)
-        raw_x, raw_y, raw_z = struct.unpack('<hhh', bytes(data))
-
-        # Default range ±6g: LSB sensitivity = 0.183 mg/LSB
-        sens = (6.0 / 32768.0) * G_TO_MS2
-        return raw_x * sens, raw_y * sens, raw_z * sens
-
-    def read_gyro(self):
-        # Read 6 bytes of gyro data (X, Y, Z)
-        data = self._read_regs(self.spi_gyro, GYRO_DATA_START, 6, is_acc=False)
-        raw_x, raw_y, raw_z = struct.unpack('<hhh', bytes(data))
-
-        # Default range ±2000 deg/s: LSB sensitivity = 61 mdeg/s / LSB
-        sens = (2000.0 / 32768.0) * DEG_TO_RAD
-        return raw_x * sens, raw_y * sens, raw_z * sens
-
-
-class BMI088Node(Node):
-    def __init__(self):
-        super().__init__('bmi088_node')
-        self.publisher_ = self.create_publisher(Imu, '/imu/data_raw', 10)
-
-        # Initialize hardware driver
-        self.bmi088 = BMI088Driver(bus=0, cs_acc=0, cs_gyro=1)
-
-        # Publish at 50 Hz
-        self.timer = self.create_timer(0.02, self.timer_callback)
-        self.get_logger().info('BMI088 ROS 2 Driver Started.')
-
-    def timer_callback(self):
-        try:
-            ax, ay, az = self.bmi088.read_accel()
-            gx, gy, gz = self.bmi088.read_gyro()
-
-            msg = Imu()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'imu_link'
-
-            # Linear Acceleration (m/s^2)
-            msg.linear_acceleration.x = float(ax)
-            msg.linear_acceleration.y = float(ay)
-            msg.linear_acceleration.z = float(az)
-
-            # Angular Velocity (rad/s)
-            msg.angular_velocity.x = float(gx)
-            msg.angular_velocity.y = float(gy)
-            msg.angular_velocity.z = float(gz)
-
-            # -1 in first element indicates orientation is not provided by raw IMU
-            msg.orientation_covariance[0] = -1.0
-
-            self.publisher_.publish(msg)
-        except Exception as e:
-            self.get_logger().error(f'Error reading BMI088: {e}')
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = BMI088Node()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
+class BaseIMUDriver(ABC):
+    @abstractmethod
+    def read_sensors(self) -> Tuple[float, float, float, float, float, float]:
+        """Returns (ax, ay, az, gx, gy, gz) in m/s^2 and rad/s."""
         pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+    def close(self): pass
 ```
 
-### 3.4. Node Execution Registration (`setup.py`)
+#### 2. MPU-6500 Driver (`mpu6500_driver.py`)
+* **Burst Read Optimization:** Performs single 14-byte SPI transactions starting at `ACCEL_XOUT_H (0x3B)` to read Accel X/Y/Z, Temperature, and Gyro X/Y/Z simultaneously, minimizing bus latency and jitter.
+* **Lock to SPI:** Asserts `I2C_IF_DIS` (bit 4 of `USER_CTRL 0x6A`) on boot to prevent inadvertent I2C mode switching.
+* **Drone-Optimized Ranges:** Defaults to ±8g accelerometer and ±2000 °/s gyroscope with Digital Low-Pass Filtering (DLPF ~92 Hz) to eliminate high-frequency motor vibration aliasing.
+
+---
+
+### 3.4. Unified ROS 2 Node (`imu_node.py`)
+
+The unified node dynamically instantiates the appropriate driver based on the ROS parameter `imu_type`:
+* **Parameters:**
+  * `imu_type`: `'mpu6500'` (default) or `'bmi088'`
+  * `rate_hz`: Target publication frequency (default `100.0` Hz)
+  * `frame_id`: Coordinate frame (default `'imu_link'`)
+  * `bus` / `cs`: SPI device parameters (default bus `0`, CS `0`)
+* **Topic Output:** Publishes `sensor_msgs/msg/Imu` to `/imu/data_raw`.
+
+---
+
+### 3.5. Node Execution Registration (`setup.py`)
 
 ```python
 entry_points={
     'console_scripts': [
+        'imu_node = imu_handler.imu_node:main',
+        'mpu6500_node = imu_handler.imu_node:main_mpu6500',
         'bmi088_node = imu_handler.bmi088_node:main',
     ],
 },
@@ -466,7 +379,7 @@ setup(
 
 ### 5.4. Integrated Launch File (`sensors.launch.py`)
 
-The unified launch file starts `foxglove_bridge`, `stereo_camera_node`, and `bmi088_node` simultaneously with parameter validation and modular toggles.
+The unified launch file starts `foxglove_bridge`, `stereo_camera_node`, and `imu_node` simultaneously with parameter validation and modular toggles.
 
 ```python
 import os
@@ -483,7 +396,17 @@ def generate_launch_description():
     launch_imu_arg = DeclareLaunchArgument(
         'launch_imu',
         default_value='true',
-        description='Whether to launch the BMI088 IMU node'
+        description='Whether to launch the IMU node'
+    )
+    imu_type_arg = DeclareLaunchArgument(
+        'imu_type',
+        default_value='mpu6500',
+        description='IMU sensor type (mpu6500, bmi088)'
+    )
+    imu_rate_arg = DeclareLaunchArgument(
+        'imu_rate',
+        default_value='100.0',
+        description='IMU publishing rate in Hz'
     )
     launch_camera_arg = DeclareLaunchArgument(
         'launch_camera',
@@ -557,17 +480,23 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('launch_camera'))
     )
 
-    bmi088_node = Node(
+    imu_node = Node(
         package='imu_handler',
-        executable='bmi088_node',
-        name='bmi088_node',
+        executable='imu_node',
+        name='imu_node',
         output='screen',
+        parameters=[{
+            'imu_type': LaunchConfiguration('imu_type'),
+            'rate_hz': ParameterValue(LaunchConfiguration('imu_rate'), value_type=float),
+        }],
         condition=IfCondition(LaunchConfiguration('launch_imu'))
     )
 
     return LaunchDescription([
         # Arguments
         launch_imu_arg,
+        imu_type_arg,
+        imu_rate_arg,
         launch_camera_arg,
         launch_foxglove_arg,
         video_device_arg,
@@ -580,7 +509,7 @@ def generate_launch_description():
         # Nodes
         foxglove_node,
         stereo_camera_node,
-        bmi088_node,
+        imu_node,
     ])
 ```
 
@@ -597,14 +526,17 @@ source install/setup.bash
 
 ### 6.2. Run Unified Sensor Bringup Launch File
 ```bash
-# Launch full stack: Foxglove Bridge + Stereo Camera + IMU Handler
+# Launch full stack: Foxglove Bridge + Stereo Camera + MPU-6500 IMU (default)
 ros2 launch sensor_bringup sensors.launch.py
 
-# Launch without IMU (ideal while awaiting BMI088 replacement unit)
+# Launch full stack with BMI088 instead (if hardware swapped)
+ros2 launch sensor_bringup sensors.launch.py imu_type:=bmi088
+
+# Launch without IMU
 ros2 launch sensor_bringup sensors.launch.py launch_imu:=false
 
-# Override camera parameters on launch if needed
-ros2 launch sensor_bringup sensors.launch.py camera_fps:=30 video_device:=0
+# Override IMU rate and camera parameters
+ros2 launch sensor_bringup sensors.launch.py imu_rate:=200.0 camera_fps:=30 video_device:=0
 ```
 
 ### 6.3. Individual Node Execution
@@ -612,7 +544,12 @@ ros2 launch sensor_bringup sensors.launch.py camera_fps:=30 video_device:=0
 # Run Camera Handler standalone
 ros2 run stereo_camera_handler stereo_node
 
-# Run IMU Handler standalone (once hardware connected)
+# Run MPU-6500 Handler standalone (default)
+ros2 run imu_handler mpu6500_node
+# or via generic node with parameters:
+ros2 run imu_handler imu_node --ros-args -p imu_type:=mpu6500 -p rate_hz:=100.0
+
+# Run BMI088 Handler standalone (when unit installed)
 ros2 run imu_handler bmi088_node
 
 # Run Foxglove Bridge standalone
