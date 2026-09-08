@@ -130,3 +130,4 @@ class MPU6500Driver(BaseIMUDriver):
             self.spi.close()
         except Exception:
             pass
+

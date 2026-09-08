@@ -29,3 +29,4 @@ class BaseIMUDriver(ABC):
     def close(self):
         """Release hardware resources / SPI connections."""
         pass
+

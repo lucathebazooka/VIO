@@ -88,3 +88,4 @@ class BMI088Driver(BaseIMUDriver):
             self.spi_gyro.close()
         except Exception:
             pass
+
