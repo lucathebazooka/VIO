@@ -24,6 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'imu_node = imu_handler.imu_node:main',
+            'mpu6500_node = imu_handler.imu_node:main_mpu6500',
             'bmi088_node = imu_handler.bmi088_node:main',
         ],
     },
