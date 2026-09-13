@@ -23,6 +23,7 @@ This drone navigates without GPS using Visual-Inertial Odometry (VIO): a downwar
 The interesting bit. Architecture in plain English:
 sensors → processing → decisions → actuators.
 A simple diagram helps a lot.
+![flow diagrom of how the VIO system works](VIO_diagram.png)
 
 ## Design decisions
 For each major choice: what I picked, what the alternative was, why.
