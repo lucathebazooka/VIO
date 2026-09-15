@@ -9,19 +9,20 @@ from .bmi088_driver import BMI088Driver
 
 
 class IMUNode(Node):
-    def __init__(self, default_imu_type: str = 'mpu6500'):
+
+    def __init__(self, imu_type: str = 'mpu6500'):
         super().__init__('imu_node')
 
         # Declare parameters
-        self.declare_parameter('imu_type', default_imu_type)
+        self.declare_parameter('imu_type', imu_type)
         self.declare_parameter('rate_hz', 100.0)
         self.declare_parameter('frame_id', 'imu_link')
         self.declare_parameter('bus', 0)
         self.declare_parameter('cs', 0)
         self.declare_parameter('cs_acc', 0)
         self.declare_parameter('cs_gyro', 1)
-        self.declare_parameter('accel_range', 8)
-        self.declare_parameter('gyro_range', 2000)
+        self.declare_parameter('accel_range', 8) #TODO: Add units as comment
+        self.declare_parameter('gyro_range', 2000) #TODO: Add units as comment
 
         # Retrieve parameters
         self.imu_type = self.get_parameter('imu_type').get_parameter_value().string_value.lower()
@@ -47,13 +48,13 @@ class IMUNode(Node):
             f"Modular IMU Driver started: type='{self.imu_type}', rate={self.rate_hz}Hz, frame_id='{self.frame_id}'"
         )
 
-    def _init_driver(self):
+    def _init_driver(self): #TODO Ensure that common IMU variants other than the 4 specifiied are handled.
         if self.imu_type in ('mpu6500', 'mpu9250', 'mpu9255'):
             self.get_logger().info(f"Initializing MPU-6500 on SPI bus {self.bus}, CS {self.cs}...")
             self.driver = MPU6500Driver(
                 bus=self.bus,
                 cs=self.cs,
-                accel_range_g=self.accel_range,
+                accel_range_g=self.accel_range, #TODO Use SI units for VIO (ms^-2)
                 gyro_range_dps=self.gyro_range,
             )
             device_name = getattr(self.driver, 'device_name', 'MPU-6500')
@@ -104,9 +105,9 @@ class IMUNode(Node):
         super().destroy_node()
 
 
-def run_node(default_imu_type: str, args=None):
+def run_node(imu_type: str, args=None):
     rclpy.init(args=args)
-    node = IMUNode(default_imu_type=default_imu_type)
+    node = IMUNode(imu_type=imu_type)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -116,8 +117,11 @@ def run_node(default_imu_type: str, args=None):
         rclpy.shutdown()
 
 
-def main(args=None):
+def main(args=None): #TODO Remove redundant main functions, add IMU variants as arg in main.
     run_node('mpu6500', args)
+
+# def main(args=imu_type):
+#   run_node(imu_type, args)
 
 
 def main_mpu6500(args=None):
