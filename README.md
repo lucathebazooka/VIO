@@ -30,10 +30,14 @@ For each major choice: what I picked, what the alternative was, why.
 e.g. "Complementary filter over Kalman: simpler to tune, and at 100Hz
 the accuracy difference didn't matter for this task."
 
+(All design decisions for building of the drone)
+
 ## What went wrong
 The most valuable section. Honest failures and how you diagnosed them.
 e.g. "Robot oscillated wildly — traced to IMU mounted too far from
 the wheel axle, amplifying angular noise."
+
+
 
 ## Results
 Numbers, tables, videos. For the evals-style project this is the
