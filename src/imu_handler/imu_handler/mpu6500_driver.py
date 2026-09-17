@@ -31,7 +31,7 @@ class MPU6500Driver:
     def _read_register(self, reg: int) -> int:
         response = self.spi.xfer2([reg | 0x80, 0x00])
         return response[1]
- 
+
     def _write_register(self, reg: int, val: int):
         self.spi.xfer2([reg & 0x7F, val])
 
