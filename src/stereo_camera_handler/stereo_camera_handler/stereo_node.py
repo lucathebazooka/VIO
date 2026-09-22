@@ -12,7 +12,7 @@ class StereoCameraNode(Node):
         self.declare_parameter('video_device', 0)
         self.declare_parameter('width', 2560)
         self.declare_parameter('height', 800)
-        self.declare_parameter('fps', 60)
+        self.declare_parameter('fps', 20)
 
         device = self.get_parameter('video_device').value
         width = self.get_parameter('width').value
