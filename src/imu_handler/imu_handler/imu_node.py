@@ -4,6 +4,13 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu
 
 from .mpu6500_driver import MPU6500Driver
+#from .bmi088_driver import BMI088Driver  # (Import secondary drivers here)
+
+# Registry mapping IMU type names to driver classes
+IMU_REGISTRY = {
+    'mpu6500': MPU6500Driver,
+    #"bmi088": BMI088Driver,
+}
 
 
 class IMUNode(Node):
@@ -15,22 +22,56 @@ class IMUNode(Node):
         self.declare_parameter('frame_id', 'imu_link')
         self.declare_parameter('bus', 0)
         self.declare_parameter('cs', 0)
+        self.declare_parameter('imu_type', 'auto')
 
         self.rate_hz = self.get_parameter('rate_hz').get_parameter_value().double_value
         self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
         self.bus = self.get_parameter('bus').get_parameter_value().integer_value
         self.cs = self.get_parameter('cs').get_parameter_value().integer_value
+        self.imu_type = self.get_parameter('imu_type').get_parameter_value().string_value.lower()
 
         self.pub_imu_raw = self.create_publisher(Imu, '/imu/data_raw', 10)
         self.pub_accel = self.create_publisher(Vector3Stamped, '/imu/accel', 10)
         self.pub_gyro = self.create_publisher(Vector3Stamped, '/imu/gyro', 10)
 
-        self.get_logger().info(f'Connecting to MPU-6500 on SPI bus {self.bus}, CS {self.cs}...')
-        self.driver = MPU6500Driver(bus=self.bus, cs=self.cs)
+        self._init_driver()
 
         timer_period = 1.0 / max(self.rate_hz, 1.0)
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.get_logger().info(f"IMU Node running at {self.rate_hz} Hz on frame '{self.frame_id}'")
+
+    def _init_driver(self):
+        # Case 1: User specified the driver type
+        if self.imu_type in IMU_REGISTRY:
+            driver_class = IMU_REGISTRY[self.imu_type]
+            self.get_logger().info(f"Initialising '{self.imu_type}' driver...")
+            self.driver = driver_class(bus=self.bus, cs=self.cs)
+            return
+
+        # Case 2: Auto-detect the driver type
+        if self.imu_type == 'auto':
+            self.get_logger().info('Auto-detecting IMU hardware...')
+            probe_errors = {}
+            for name, driver_class in IMU_REGISTRY.items():
+                try:
+                    self.get_logger().info(
+                        f'Probing {name} on SPI bus {self.bus}, CS {self.cs}...'
+                    )
+                    self.driver = driver_class(bus=self.bus, cs=self.cs)
+                    self.get_logger().info(
+                        f'Successfully auto-detected and connected to {name}!'
+                    )
+                    return
+                except Exception as e:
+                    probe_errors[name] = str(e)
+
+            msg = f'Could not auto-detect any connected IMU. Probe logs: {probe_errors}'
+            raise RuntimeError(msg)
+
+        supported = list(IMU_REGISTRY.keys()) + ['auto']
+        raise ValueError(
+            f"Unknown imu_type '{self.imu_type}'. Supported IMUs: {supported}"
+        )
 
     def timer_callback(self):
         try:

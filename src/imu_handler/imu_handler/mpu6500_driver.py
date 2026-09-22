@@ -1,30 +1,19 @@
-import spidev
 import struct
 import time
-import struct
 from typing import Tuple
 
 import spidev
 
 REG_WHO_AM_I = 0x75
 EXPECTED_WHO_AM_I = 0x70
-REG_CONFIG         = 0x1A  # Gyro DLPF Filter
-REG_GYRO_CONFIG    = 0x1B  # Gyro Range (+/- 2000 dps)
-REG_ACCEL_CONFIG   = 0x1C  # Accel Range (+/- 8g)
 REG_CONFIG = 0x1A  # Gyro DLPF Filter
 REG_GYRO_CONFIG = 0x1B  # Gyro Range (+/- 2000 dps)
 REG_ACCEL_CONFIG = 0x1C  # Accel Range (+/- 8g)
 REG_ACCEL_CONFIG_2 = 0x1D  # Accel DLPF Filter
-REG_USER_CTRL      = 0x6A  # Disable I2C
-REG_PWR_MGMT_1     = 0x6B  # Power Management
 REG_USER_CTRL = 0x6A  # Disable I2C
 REG_PWR_MGMT_1 = 0x6B  # Power Management
 REG_ACCEL_XOUT_H = 0x3B  # Start of 14-byte sensor data block
 
-G_TO_MS2 = 9.80665 # 1g = 9.80665 m/s^2
-DEG_TO_RAD = 0.017453292519943295 # 1 degree = pi/180 radians
-ACCEL_SCALE = (8.0 / 32768.0) * G_TO_MS2 # Adds a scale factor for +- 8g
-GYRO_SCALE = (2000.0 / 32768.0) * DEG_TO_RAD # Adds a scale factor for +- 2000dps
 G_TO_MS2 = 9.80665  # 1g = 9.80665 m/s^2
 DEG_TO_RAD = 0.017453292519943295  # 1 degree = pi/180 radians
 ACCEL_SCALE = (8.0 / 32768.0) * G_TO_MS2  # Adds a scale factor for +- 8g
@@ -70,11 +59,9 @@ class MPU6500Driver:
         self._write_register(REG_GYRO_CONFIG, 0x18)
         self._write_register(REG_ACCEL_CONFIG, 0x10)
         self._write_register(REG_ACCEL_CONFIG_2, 0x02)
-    
 
     def read_sensors(self) -> Tuple[float, float, float, float, float, float]:
         raw_data = self.spi.xfer2([REG_ACCEL_XOUT_H | 0x80] + [0x00] * 14)[1:]
-        ax_raw, ay_raw, az_raw, temp_raw, gx_raw, gy_raw, gz_raw = struct.unpack('>hhhhhhh', bytes(raw_data))
         (
             ax_raw, ay_raw, az_raw,
             temp_raw,
