@@ -1,4 +1,3 @@
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
@@ -16,12 +15,12 @@ def generate_launch_description():
     )
     imu_type_arg = DeclareLaunchArgument(
         'imu_type',
-        default_value='mpu6500',
-        description='IMU sensor type (mpu6500, bmi088)'
+        default_value='auto',
+        description='IMU sensor type (auto, mpu6500, bmi088)'
     )
     imu_rate_arg = DeclareLaunchArgument(
         'imu_rate',
-        default_value='100.0',
+        default_value='500.0',
         description='IMU publishing rate in Hz'
     )
     launch_camera_arg = DeclareLaunchArgument(
@@ -77,7 +76,9 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'port': ParameterValue(LaunchConfiguration('foxglove_port'), value_type=int),
-            'send_buffer_limit': ParameterValue(LaunchConfiguration('foxglove_send_buffer_limit'), value_type=int),
+            'send_buffer_limit': ParameterValue(
+                LaunchConfiguration('foxglove_send_buffer_limit'), value_type=int
+            ),
         }],
         condition=IfCondition(LaunchConfiguration('launch_foxglove'))
     )
