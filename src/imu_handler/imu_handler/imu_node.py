@@ -2,7 +2,6 @@ from geometry_msgs.msg import Vector3Stamped
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
-import sys
 
 from .mpu6500_driver import MPU6500Driver
 #from .bmi088_driver import BMI088Driver  # (Import secondary drivers here)
@@ -65,7 +64,6 @@ class IMUNode(Node):
                     return
                 except Exception as e:
                     probe_errors[name] = str(e)
-                    sys.exit(1)
 
             msg = f'Could not auto-detect any connected IMU. Probe logs: {probe_errors}'
             self.get_logger().fatal(msg)
