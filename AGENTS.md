@@ -9,6 +9,10 @@
 - **Clean Git History**: Create atomic, well-scoped commits with clear, descriptive commit messages. Never commit broken code or leftover scratch files.
 - **Workspace Boundary**: Strictly limit file edits and operations to the current workspace directory (`/home/pi`).
 
+## Raspberry Pi SSH Access
+- ssh pi@192.168.2.2
+- **Password**: `admin`
+
 ## Code Quality & Architecture
 - **MVP First**: Produce the minimum viable product that satisfies requirements. Avoid premature abstraction, unnecessary boilerplate, or unrequested features.
 - **Modularity & Readability**: Keep functions and components small, focused, and idiomatic. Adhere to standard linting and formatting conventions for the language in use.
