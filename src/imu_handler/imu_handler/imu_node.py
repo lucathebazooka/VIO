@@ -18,7 +18,7 @@ class IMUNode(Node):
     def __init__(self):
         super().__init__('imu_node')
 
-        self.declare_parameter('rate_hz', 200.0)
+        self.declare_parameter('rate_hz', 500.0)
         self.declare_parameter('frame_id', 'imu_link')
         self.declare_parameter('bus', 0)
         self.declare_parameter('cs', 0)
