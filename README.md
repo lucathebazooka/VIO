@@ -24,22 +24,16 @@ The interesting bit. Architecture in plain English:
 sensors → processing → decisions → actuators.
 A simple diagram helps a lot.
 
-
 ![flow diagrom of how the VIO system works](docs/system_diagram/VIO_diagram.png)
 
 ## Design decisions
-For each major choice: what I picked, what the alternative was, why.
-e.g. "Complementary filter over Kalman: simpler to tune, and at 100Hz
-the accuracy difference didn't matter for this task."
-
-(All design decisions for building of the drone)
+- Choice of camera
+- Choice of raspberry pi
+- Choice of OpenVINS as VIO Pipeline
+(Complete all with detail)
 
 ## What went wrong
-The most valuable section. Honest failures and how you diagnosed them.
-e.g. "Robot oscillated wildly — traced to IMU mounted too far from
-the wheel axle, amplifying angular noise."
-
-
+- Early driver code for IMU and Camera nodes was completely AI generated with little to know oversight or understanding of resulting code before it was implemented. When the IMU data became bad it was hard to distinguish whether it was a hardware or software problem. Rewrote/reviewed the driver code until I understood it. New rule: no code goes in that I can't explain.
 
 ## Results
 Numbers, tables, videos. For the evals-style project this is the
