@@ -1,6 +1,6 @@
 # VIO
 
-One-sentence description + a photo or GIF of it working (GIFs are gold).
+A custom build 3D printed RC quadcopter using Visual Inertial Odometry (VIO) to navigate its surroundings.
 
 ## What it does
 This drone navigates without GPS using Visual-Inertial Odometry (VIO): a downward-facing stereo camera and an IMU are fused onboard a Raspberry Pi 5 to estimate the drone's position and motion in real time. This enables autonomous flight in GPS-denied or GPS-degraded environments such as indoors, warehouses, disaster zones, defence settings, as well as in tasks like infrastructure inspection where navigating relative to the immediate surroundings matters more than global coordinates.
