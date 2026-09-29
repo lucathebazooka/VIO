@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Page-1" id="Evds_d1fzIGtMS8VWN-_">
-    <mxGraphModel dx="964" dy="634" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="711" dy="678" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -55,13 +55,13 @@
         <mxCell id="Kz8cuZljUpicS92FTQL_-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="imu_node" vertex="1">
           <mxGeometry height="60" width="120" x="200" y="210" as="geometry" />
         </mxCell>
-        <mxCell id="Kz8cuZljUpicS92FTQL_-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/imu/data_raw (50-200hz)" vertex="1">
+        <mxCell id="Kz8cuZljUpicS92FTQL_-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/imu/data_raw (500hz)" vertex="1">
           <mxGeometry height="60" width="120" x="360" y="120" as="geometry" />
         </mxCell>
-        <mxCell id="Kz8cuZljUpicS92FTQL_-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/camera/left/image_raw (60hz)" vertex="1">
+        <mxCell id="Kz8cuZljUpicS92FTQL_-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/camera/left/image_raw (30hz)" vertex="1">
           <mxGeometry height="30" width="140" x="360" y="205" as="geometry" />
         </mxCell>
-        <mxCell id="Kz8cuZljUpicS92FTQL_-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/camera/right/image_raw (60hz)" vertex="1">
+        <mxCell id="Kz8cuZljUpicS92FTQL_-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="/camera/right/image_raw (30hz)" vertex="1">
           <mxGeometry height="30" width="140" x="360" y="245" as="geometry" />
         </mxCell>
         <mxCell id="Kz8cuZljUpicS92FTQL_-10" edge="1" parent="1" source="Kz8cuZljUpicS92FTQL_-8" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;endArrow=none;endFill=0;">
@@ -112,7 +112,7 @@
             <mxPoint x="400" y="220" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="Kz8cuZljUpicS92FTQL_-30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Data Syncronisation Node" vertex="1">
+        <mxCell id="Kz8cuZljUpicS92FTQL_-30" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="OpenVINS Pipeline" vertex="1">
           <mxGeometry height="60" width="120" x="580" y="170" as="geometry" />
         </mxCell>
       </root>
