@@ -3,7 +3,6 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge 
 import cv2
-import numpy as np
 
 class StereoCameraNode(Node):
     def __init__(self):
@@ -58,7 +57,7 @@ class StereoCameraNode(Node):
         actual_buffersize = int(self.cap.get(cv2.CAP_PROP_BUFFERSIZE))
 
         self.get_logger().info(
-            f'Actual camera: {actual_width}x{actual_height} @ {actual_fps} FPS'
+            f'Actual camera: {actual_width}x{actual_height} @ {actual_fps} FPS '
             f'({actual_fourcc}), buffer={actual_buffersize}'
         )
 
