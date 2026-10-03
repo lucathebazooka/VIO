@@ -294,7 +294,7 @@ entry_points={
 
 ---
 
-## 5. Package 3: System Bringup & Visualization (`sensor_bringup`)
+## 5. Package 3: System Bringup & Visualization (`sensor_launch`)
 
 ### 5.1. Overview & Foxglove Studio Integration
 Foxglove Bridge (`ros-jazzy-foxglove-bridge`) provides high-performance WebSocket streaming of ROS 2 topics directly to Foxglove Studio (desktop or web app). This enables real-time visualization of high-bandwidth image topics (`/camera/left/image_raw`, `/camera/right/image_raw`) and IMU telemetry (`/imu/data_raw`) over the local network without needing heavy GUI tools (like RViz2) running locally on the Raspberry Pi 5.
@@ -306,12 +306,12 @@ Foxglove Bridge (`ros-jazzy-foxglove-bridge`) provides high-performance WebSocke
 ### 5.2. Package Structure
 
 ```text
-ros2_ws/src/sensor_bringup/
+ros2_ws/src/sensor_launch/
 ├── package.xml
 ├── setup.cfg
 ├── setup.py
 ├── resource/
-│   └── sensor_bringup
+│   └── sensor_launch
 └── launch/
     └── sensors.launch.py
 ```
@@ -323,7 +323,7 @@ ros2_ws/src/sensor_bringup/
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>sensor_bringup</name>
+  <name>sensor_launch</name>
   <version>0.0.0</version>
   <description>Bringup package launching sensor nodes and Foxglove Bridge for VIO drone project</description>
   <maintainer email="pi@todo.todo">pi</maintainer>
@@ -351,7 +351,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'sensor_bringup'
+package_name = 'sensor_launch'
 
 setup(
     name=package_name,
@@ -527,16 +527,16 @@ source install/setup.bash
 ### 6.2. Run Unified Sensor Bringup Launch File
 ```bash
 # Launch full stack: Foxglove Bridge + Stereo Camera + MPU-6500 IMU (default)
-ros2 launch sensor_bringup sensors.launch.py
+ros2 launch sensor_launch sensors.launch.py
 
 # Launch full stack with BMI088 instead (if hardware swapped)
-ros2 launch sensor_bringup sensors.launch.py imu_type:=bmi088
+ros2 launch sensor_launch sensors.launch.py imu_type:=bmi088
 
 # Launch without IMU
-ros2 launch sensor_bringup sensors.launch.py launch_imu:=false
+ros2 launch sensor_launch sensors.launch.py launch_imu:=false
 
 # Override IMU rate and camera parameters
-ros2 launch sensor_bringup sensors.launch.py imu_rate:=200.0 camera_fps:=30 video_device:=0
+ros2 launch sensor_launch sensors.launch.py imu_rate:=200.0 camera_fps:=30 video_device:=0
 ```
 
 ### 6.3. Individual Node Execution
@@ -594,7 +594,7 @@ ros2 topic echo /imu/data_raw
   - [x] IMU data handler (ROS 2 node) *(Code complete, waiting for replacement unit)*
   - [x] Camera input in Pi (ROS 2) *(Stereo node split and publishing over GStreamer)*
   - [x] Foxglove Bridge integration & telemetry visualization setup
-  - [x] Unified sensor bringup launch package (`sensor_bringup`)
+  - [x] Unified sensor bringup launch package (`sensor_launch`)
   - [ ] IMU sensor data fusion with camera on Pi for drift elimination
   - [ ] Test 1:
     - [ ] Stationary test
