@@ -59,9 +59,14 @@ def generate_launch_description():
             description = 'Height in pixels of combined stereo frame',
         ),
         DeclareLaunchArgument(
-            'camera_fps',
+            'camera_capture_fps',
+            default_value = '60',
+            description = 'Frame rate the stereo camera captures with in hz',
+        ),
+        DeclareLaunchArgument(
+            'camera_publish_fps',
             default_value = '30',
-            description = 'Frame rate of the stereo camera in hz',
+            description = 'Frame rate the stereo camera publishes with in hz',
         ),
         DeclareLaunchArgument(
             'camera_frame_left',
@@ -124,7 +129,8 @@ def generate_launch_description():
                 'video_device': ParameterValue(LaunchConfiguration('video_device'), value_type = int),
                 'width': ParameterValue(LaunchConfiguration('camera_width'), value_type = int),
                 'height': ParameterValue(LaunchConfiguration('camera_height'), value_type = int),
-                'fps': ParameterValue(LaunchConfiguration('camera_fps'), value_type = int),
+                'capture_fps': ParameterValue(LaunchConfiguration('camera_capture_fps'), value_type = int),
+                'publish_fps': ParameterValue(LaunchConfiguration('camera_publish_fps'), value_type = int),
                 'frame_id_left': LaunchConfiguration('camera_frame_left'),
                 'frame_id_right': LaunchConfiguration('camera_frame_right'),
                 'camera_info_url': LaunchConfiguration('camera_calib_file'),

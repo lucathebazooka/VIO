@@ -12,7 +12,8 @@ class StereoCameraNode(Node):
         self.declare_parameter('video_device', 0)
         self.declare_parameter('width', 1280)
         self.declare_parameter('height', 400)
-        self.declare_parameter('fps', 30)
+        self.declare_parameter('capture_fps', 60)
+        self.declare_parameter('publish_fps', 30)
         self.declare_parameter('frame_id_left', 'camera_left_optical_frame')
         self.declare_parameter('frame_id_right', 'camera_right_optical_frame')
         self.declare_parameter('camera_info_url', '')
@@ -21,7 +22,8 @@ class StereoCameraNode(Node):
         device = self.get_parameter('video_device').value
         width = self.get_parameter('width').value
         height = self.get_parameter('height').value
-        fps = self.get_parameter('fps').value
+        capture_fps = self.get_parameter('capture_fps').value
+        publish_fps = self.get_parameter('publish_fps').value
         self.frame_id_left = self.get_parameter('frame_id_left').value
         self.frame_id_right = self.get_parameter('frame_id_right').value
         camera_info_url = self.get_parameter('camera_info_url').value
@@ -45,7 +47,7 @@ class StereoCameraNode(Node):
         self.cap.set(cv2.CAP_PROP_FOURCC, fourcc_mjpeg)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.cap.set(cv2.CAP_PROP_FPS, fps)
+        self.cap.set(cv2.CAP_PROP_FPS, capture_fps)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) #minimal latency, drops old frames
 
         # Verify
@@ -71,14 +73,14 @@ class StereoCameraNode(Node):
             self.get_logger().warn(
                 f'Actual resultion: {actual_width}x{actual_height}, does not equal requesed resolution: {width}x{height}'
                 )
-        if abs(fps - actual_fps) > 1:
-            self.get_logger().warn(f'Actual fps: {actual_fps}, does not equal requested fps: {fps}')
+        if abs(capture_fps - actual_fps) > 1:
+            self.get_logger().warn(f'Actual fps: {actual_fps}, does not equal requested fps: {capture_fps}')
         if actual_buffersize != 1:
             self.get_logger().warn(
                 f'Actual buffersize: {actual_buffersize}, does not equal requested buffersize: 1 (may increase latency)'
                 )
 
-        timer_period = 1 / max(fps, 1.0)
+        timer_period = 1 / max(publish_fps, 1.0)
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def timer_callback(self):
