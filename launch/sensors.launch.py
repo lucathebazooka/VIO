@@ -1,1 +1,0 @@
-/home/pi/ros2_ws/src/sensor_bringup/launch/sensors.launch.py
