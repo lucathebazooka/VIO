@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu
 
 from .mpu6500_driver import MPU6500Driver
+from .bmi270_driver import BMI270Driver
 #from .bmi088_driver import BMI088Driver  # (Import secondary drivers here)
 
 # Registry mapping IMU type names to driver classes
