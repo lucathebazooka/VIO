@@ -18,7 +18,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'imu_type',
-            default_value = 'mpu6500',
+            default_value = 'auto',
             description = 'What IMU we are retrieving the data',
         ),
         DeclareLaunchArgument(
