@@ -9,6 +9,7 @@ from .mpu6500_driver import MPU6500Driver
 # Registry mapping IMU type names to driver classes
 IMU_REGISTRY = {
     'mpu6500': MPU6500Driver,
+    'bmi270': BMI270Driver,
     #"bmi088": BMI088Driver,
 }
 
