@@ -17,8 +17,8 @@ REG_GYR_CONF = 0x42        # Gyro ODR & Bandwidth
 REG_GYR_RANGE = 0x43       # Gyro Range (+/- 2000 dps)
 
 REG_INIT_CTRL = 0x59
-REG_INIT_ADDR_0 = 0x5E
-REG_INIT_DATA = 0x5F
+REG_INIT_ADDR_0 = 0x5B
+REG_INIT_DATA = 0x5E
 
 REG_PWR_CONF = 0x7C        # Power save modes
 REG_PWR_CTRL = 0x7D        # Sensor power enable
@@ -68,35 +68,35 @@ class BMI270Driver:
                 "Please download bmi270.c from Bosch Sensortec"
             )
 
-            with open(self.fw_path, "rb") as f:
-                microcode = f.read()
+        with open(self.fw_path, "rb") as f:
+            microcode = f.read()
 
-            print(f"Loading {len(microcode)} bytes of microcode to BMI270...")
+        print(f"Loading {len(microcode)} bytes of microcode to BMI270...")
 
-            # 1. Disable power saving mode during load
-            self._write_register(REG_PWR_CONF, 0x00)
-            time.sleep(0.0005)
+        # 1. Disable power saving mode during load
+        self._write_register(REG_PWR_CONF, 0x00)
+        time.sleep(0.0005)
 
-            # 2. Reset initialization memory pointer
-            self._write_register(REG_INIT_CTRL, 0x00)
-            self._write_register(REG_INIT_ADDR_0, 0x00)
+        # 2. Reset initialization memory pointer
+        self._write_register(REG_INIT_CTRL, 0x00)
+        self._write_register(REG_INIT_ADDR_0, 0x00)
 
-            # 3. Stream microcode array over SPI in 32-byte chunks
-            chunk_size = 32
-            for i in range(0, len(microcode), chunk_size):
-                chunk = list(microcode[i:i + chunk_size])
-                self.spi.xfer2([(REG_INIT_DATA & 0x7F)] + chunk)
+        # 3. Stream microcode array over SPI in 32-byte chunks
+        chunk_size = 32
+        for i in range(0, len(microcode), chunk_size):
+            chunk = list(microcode[i:i + chunk_size])
+            self.spi.xfer2([(REG_INIT_DATA & 0x7F)] + chunk)
 
-            # 4. Signal load completion
-            self._write_register(REG_INIT_CTRL, 0x01)
-            time.sleep(0.02)
+        # 4. Signal load completion
+        self._write_register(REG_INIT_CTRL, 0x01)
+        time.sleep(0.02)
 
-            # 5. Check initialization status
-            status = self._read_register(REG_INTERNAL_STATUS) & 0x0F
-            if status != 0x01:
-                raise RuntimeError(f"BMI270 microcode load failed! Status register: {hex(status)}")
-            
-            print("BMI270 microcode initialized successfully.")
+        # 5. Check initialization status
+        status = self._read_register(REG_INTERNAL_STATUS) & 0x0F
+        if status != 0x01:
+            raise RuntimeError(f"BMI270 microcode load failed! Status register: {hex(status)}")
+        
+        print("BMI270 microcode initialized successfully.")
 
     def _init_sensor(self):
         # Soft reset
