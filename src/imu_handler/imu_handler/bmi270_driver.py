@@ -52,17 +52,17 @@ class BMI270Driver:
         self.spi.xfer2([reg & 0x7F, val])
 
     def _verify_identity(self):
-        who_am_i = self._read_register(REG_CHI_ID)
-        if who_am_i != EXPECTED_CHIP_ID:
+        chip_id = self._read_register(REG_CHIP_ID)
+        if chip_id != EXPECTED_CHIP_ID:
             raise RuntimeError(
-                f'Failed to find BMI270! Read WHO_AM_I = {hex(who_am_i)}, '
-                f'expected: {hex(EXPECTED_WHO_AM_I)}'
+                f'Failed to find BMI270! Read CHIP_ID = {hex(chip_id)}, '
+                f'expected: {hex(EXPECTED_CHIP_ID)}'
             )
-        print(f'Successfully identified BMI270 IMU (ID: {hex(who_am_i)})')
+        print(f'Successfully identified BMI270 IMU (ID: {hex(chip_id)})')
 
     def _upload_microcode(self):
         if not os.path.exists(self.fw_path):
-            raise FIleNotFoundError(
+            raise FileNotFoundError(
                 f"Microcode firmware file not fount at {self.fw_path}. "
                 "Please download bmi270.c from Bosch Sensortec"
             )
