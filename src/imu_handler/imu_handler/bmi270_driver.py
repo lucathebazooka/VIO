@@ -32,15 +32,16 @@ GYRO_SCALE = (2000.0 / 32768.0) * DEG_TO_RAD  # Adds a scale factor for +- 2000d
 
 class BMI270Driver:
 
-    def __init__(self, bus: int = 0, cs: int = 0, fw_path: str = "bmi270.c"):
+    def __init__(self, bus: int = 0, cs: int = 0, 
+    fw_path: str = "/home/pi/ros2_ws/src/imu_handler/imu_handler/bmi270.c"):
         self.fw_path = fw_path
         self.spi = spidev.SpiDev()
         self.spi.open(bus, cs)
         self.spi.mode = 0
         self.spi.max_speed_hz = 1000000
-        
-        self._verify_identity()
+
         self._init_sensor()
+        self._verify_identity()
         
         self.spi.max_speed_hz = 5000000
 
