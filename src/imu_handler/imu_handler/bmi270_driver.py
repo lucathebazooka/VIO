@@ -108,7 +108,7 @@ class BMI270Driver:
         for i in range(0, len(microcode), chunk_size):
             word = i // 2
             self._write_register(REG_INIT_ADDR_0, word & 0x0F)
-            self._write_register(REG_INIT_ADDR_1, (word >> 4) & 0x0F)
+            self._write_register(REG_INIT_ADDR_1, (word >> 4) & 0xFF)
             chunk = list(microcode[i:i + chunk_size])
             self.spi.xfer2([(REG_INIT_DATA & 0x7F)] + chunk)
 
