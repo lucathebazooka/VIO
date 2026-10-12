@@ -2,6 +2,7 @@ import struct
 import time
 from typing import Tuple
 import os
+import re
 
 import spidev
 
@@ -29,11 +30,14 @@ DEG_TO_RAD = 0.017453292519943295  # 1 degree = pi/180 radians
 ACCEL_SCALE = (8.0 / 32768.0) * G_TO_MS2  # Adds a scale factor for +- 8g
 GYRO_SCALE = (2000.0 / 32768.0) * DEG_TO_RAD  # Adds a scale factor for +- 2000dps
 
+EXPECTED_FW_LENGTH = 8192
+CONFIG_ARRAY_START = 'bmi270_config_file[] = {'
+DEFAULT_FW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bmi270.c')
+
 
 class BMI270Driver:
 
-    def __init__(self, bus: int = 0, cs: int = 0, 
-    fw_path: str = "/home/pi/ros2_ws/src/imu_handler/imu_handler/bmi270.c"):
+    def __init__(self, bus: int = 0, cs: int = 0, fw_path: str = DEFAULT_FW_PATH):
         self.fw_path = fw_path
         self.spi = spidev.SpiDev()
         self.spi.open(bus, cs)
@@ -61,6 +65,23 @@ class BMI270Driver:
             )
         print(f'Successfully identified BMI270 IMU (ID: {hex(chip_id)})')
 
+    def _load_firmware(self, path: str) -> bytes:
+        with open(path, "r") as f:
+            text = f.read()
+        
+        start = text.index(CONFIG_ARRAY_START)
+        end = text.index('};', start)
+        config_text = text[start:end]
+        tokens = re.findall(r'0x[0-9a-fA-F]{2}', config_text)
+        
+        firmware = bytes(int(tok, 16) for tok in tokens)
+        if len(firmware) != EXPECTED_FW_LENGTH:
+            raise ValueError(
+                f'Length of extracted firmware ({len(firmware)} bytes) '
+                f'is not as expected ({EXPECTED_FW_LENGTH} bytes)'
+            )
+        return firmware
+
     def _upload_microcode(self):
         if not os.path.exists(self.fw_path):
             raise FileNotFoundError(
@@ -68,8 +89,7 @@ class BMI270Driver:
                 "Please download bmi270.c from Bosch Sensortec"
             )
 
-        with open(self.fw_path, "rb") as f:
-            microcode = f.read()
+        microcode = self._load_firmware(self.fw_path)
 
         print(f"Loading {len(microcode)} bytes of microcode to BMI270...")
 
