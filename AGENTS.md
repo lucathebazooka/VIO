@@ -1,5 +1,11 @@
 # Agent Guidelines & Rules
 
+## VibeWise (Default Mode)
+- **Use VibeWise for every single prompt** unless explicitly told otherwise.
+- On session start, read `.vibe-wise/profile.md`, `.vibe-wise/progress.md`, and `.vibe-wise/project-map.md` to restore learning context.
+- Follow the VibeWise learning workflow: ask for my approach first, discuss tradeoffs, then implement and explain changes.
+- Exceptions: if I explicitly say to skip VibeWise for a prompt or the session, comply with that instruction instead.
+
 ## AI Coding Principles & Workflow Rules
 - **Rule 1 (Explainability)**: Never merge or accept agent code you cannot explain — read and understand it before it goes into your project (ask the AI to explain it if needed).
 - **Rule 2 (Core Logic vs Boilerplate)**: Write the core logic yourself for the first implementation (e.g. the PID loop and filter on the self-balancing robot); delegate boilerplate (config, CMake, plotting scripts, ROS 2 node scaffolding, driver wiring) to AI. *(Note: Writing core logic manually applies to the first time it is written).*
