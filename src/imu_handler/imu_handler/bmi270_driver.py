@@ -123,6 +123,9 @@ class BMI270Driver:
         self._write_register(REG_CMD, 0xB6)
         time.sleep(0.05)
 
+        # Dummy read to return the interface to SPI after reset
+        self._read_register(REG_CHIP_ID)
+
         # Upload firmware file
         self._upload_microcode()
 
