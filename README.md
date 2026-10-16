@@ -24,13 +24,25 @@ The interesting bit. Architecture in plain English:
 sensors → processing → decisions → actuators.
 A simple diagram helps a lot.
 
-![flow diagrom of how the VIO system works](docs/system_diagram/VIO_diagram.png)
+![flow diagram of how the VIO system works](docs/system_diagram/VIO_diagram.png)
 
 ## Design decisions
-- Choice of camera
 - Choice of raspberry pi
-- Choice of OpenVINS as VIO Pipeline
 (Complete all with detail)
+one line of decision + one line of why/tradeoff, in your own words
+- **Raspberry Pi as Main Compute Module for VIO Algorithm**
+    - Initially this was the most obvious and default choice for this project but we have our reasons too. The new Pi 5 (8gb) has ample headroom to run ROS2, MJPG decode, and OpenVINS all on the same board while at the same time sipping on power. The board is also extremely common and heavily documented with a cult-like online community for support, and natively runs Ubuntu 24.04 and ROS2 Jazzy (who were chosen since they have been around long enough for the support around them to mature and because they were then newest versions that comfortably supported what we want to run).
+- **Downward-Facing Global-Shutter Stereo Camera**
+    - This was chosen as the global shutter remove motion blur during flight and removes any possible inconsistencies that might come with two individual shutters. The downward view also gives us ground relative odometry which is pretty much the only view that gives enough data for a quadcopter flying high up.
+- **OpenVINS as the VIO Algorithm**
+    - We chose OpenVINS as our VIO algorithm due to its lightweight, filter based architecture that can effortlessly run on our 8gb Pi 5 with correct IMU and camera rates resulting in the low latency required to fly stably. It is also able to calculate depth natively and has a great community and documentation online. It may not be as accurate or drift free as some other alternatives but it is the best option for our case specficically.
+- **Sensor Rate Choices: 200hz IMU, 20 fps Camera**
+    - We chose these rates for the IMU and Camera as they were around the minimum stated on forumns and documentation for use with OpenVINS. The though here is that we are able to test with the minimum rate minimum pressure on our hardware and then increase the rates during testing until we reach the comforatble limit of the Pi 5.
+- **MJPG Image Capture Format**
+    - The two option we had for the iamge capture format were MJPG and YUYV. YUYV is uncompressed and would take up unecessary bandwidth over the USB link at the rates we wanted to use/test so MJPG was chosen even with the small trade off of extra decode on the CPU.
+- **BMI270 Measurement Config: ±8g / ±2000dps at 200Hz ODR**
+    - As we increase the accelerometer range we also loose resolution so ±8g gives us ample headroom over gravity without loosing any resultion that would genuinly affect the results (noise often much larger than the resolution for 8g anyways). 2000dps was chosen as it was the largest range and by going smaller the loss in resolution was almost insignificant compared to any noise. The 200Hz ODR was chosen simply due to the fact that it fits with node's publish rate (will change as the publish rate changes).
+
 
 ## What went wrong
 (1) symptom: what you observed, (2) cause: what was actually wrong, (3) fix or workaround, (4) optionally what you'd do differently next time. A bolded one-line title per problem so it skims well.
