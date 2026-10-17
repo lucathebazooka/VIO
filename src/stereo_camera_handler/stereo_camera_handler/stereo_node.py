@@ -10,10 +10,10 @@ class StereoCameraNode(Node):
 
         # Declaring parameters
         self.declare_parameter('video_device', 0)
-        self.declare_parameter('width', 1280)
-        self.declare_parameter('height', 400)
+        self.declare_parameter('width', 2560)
+        self.declare_parameter('height', 800)
         self.declare_parameter('capture_fps', 60)
-        self.declare_parameter('publish_fps', 30)
+        self.declare_parameter('publish_fps', 20)
         self.declare_parameter('frame_id_left', 'camera_left_optical_frame')
         self.declare_parameter('frame_id_right', 'camera_right_optical_frame')
         self.declare_parameter('camera_info_url', '')
@@ -27,6 +27,15 @@ class StereoCameraNode(Node):
         self.frame_id_left = self.get_parameter('frame_id_left').value
         self.frame_id_right = self.get_parameter('frame_id_right').value
         camera_info_url = self.get_parameter('camera_info_url').value
+
+        # Capture at capture_fps and publish only every Nth frame, so publish_fps
+        # must divide capture_fps evenly (60 -> 20, 30 or 60).
+        if publish_fps <= 0 or capture_fps % publish_fps != 0:
+            raise ValueError(
+                f'publish_fps ({publish_fps}) must be a positive divisor of '
+                f'capture_fps ({capture_fps}), e.g. capture 60 -> publish 20/30/60'
+            )
+        self.publish_divisor = capture_fps // publish_fps
 
         # Create publishers
         self.left_pub = self.create_publisher(Image, '/camera/left/image_raw', 10)
@@ -80,17 +89,28 @@ class StereoCameraNode(Node):
                 f'Actual buffersize: {actual_buffersize}, does not equal requested buffersize: 1 (may increase latency)'
                 )
 
-        timer_period = 1 / max(publish_fps, 1.0)
-        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.frame_count = 0
+        self.get_logger().info(
+            f'Publishing every {self.publish_divisor} frame(s) '
+            f'(~{publish_fps} FPS from {actual_fps} FPS capture)'
+        )
 
-    def timer_callback(self):
+    def run(self):
+        # camera's frame rate now drives the loop instead of the ROS timer
+        while rclpy.ok():
+            self.capture_once()
+
+
+    def capture_once(self):
         ret, frame = self.cap.read()
         if not ret or frame is None:
-            self.get_logger().warn('Failed to grab frame', throttle_duration_sec = 2.0)
+            self.get_logger().error('Error reading Camera: failed to grab frame', throttle_duration_sec=2.0)
             return
-
         now_stamp = self.get_clock().now().to_msg()
-
+        should_publish = (self.frame_count % self.publish_divisor) == 0
+        self.frame_count += 1
+        if not should_publish:
+            return
         half = frame.shape[1] // 2
         left = frame[:,:half]
         right = frame[:,half:]
@@ -116,7 +136,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = StereoCameraNode()
     try:
-        rclpy.spin(node)
+        node.run()
     except KeyboardInterrupt:
         pass
     finally:

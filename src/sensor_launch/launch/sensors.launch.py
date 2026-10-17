@@ -50,12 +50,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'camera_width',
-            default_value = '1280',
+            default_value = '2560',
             description = 'Width in pixels of combined stereo frame',
         ),
         DeclareLaunchArgument(
             'camera_height',
-            default_value = '400',
+            default_value = '800',
             description = 'Height in pixels of combined stereo frame',
         ),
         DeclareLaunchArgument(
@@ -65,7 +65,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'camera_publish_fps',
-            default_value = '30',
+            default_value = '20',
             description = 'Frame rate the stereo camera publishes with in hz',
         ),
         DeclareLaunchArgument(
