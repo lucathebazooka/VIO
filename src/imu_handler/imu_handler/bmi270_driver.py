@@ -9,7 +9,8 @@ import spidev
 REG_CHIP_ID = 0x00
 EXPECTED_CHIP_ID = 0x24
 
-REG_ACC_DATA_0 = 0x0C      # Accel X LSB (Start of 12-byte sensor block)
+REG_ACC_DATA_0 = 0x0C      # Accel X LSB (start of the accel/gyro data block)
+REG_SENSORTIME_0 = 0x18    # Sensor time LSB (3-byte block, one tick = 39.0625 us)
 REG_INTERNAL_STATUS = 0x21
 
 REG_ACC_CONF = 0x40        # Accel ODR & Bandwidth
@@ -38,7 +39,6 @@ DEFAULT_FW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bmi2
 
 
 class BMI270Driver:
-
     def __init__(self, bus: int = 0, cs: int = 0, fw_path: str = DEFAULT_FW_PATH):
         self.fw_path = fw_path
         self.spi = spidev.SpiDev()
@@ -50,6 +50,12 @@ class BMI270Driver:
         self._verify_identity()
         
         self.spi.max_speed_hz = 5000000
+
+        # Hardware properties of the BMI270's SENSORTIME counter. The node reads these
+        # to turn raw ticks into time, and to de-duplicate samples.
+        self.has_sensortime = True
+        self.sensortime_tick_ns = 39062.5   # one SENSORTIME tick = 39.0625 us
+        self.sensortime_modulo = 1 << 24    # 24-bit counter; wraps at this value
 
     def _read_register(self, reg: int) -> int:
         response = self.spi.xfer2([reg | 0x80, 0x00, 0x00])
@@ -148,11 +154,14 @@ class BMI270Driver:
         # Disable auto power save mode
         self._write_register(REG_PWR_CONF, 0x00)
 
-    def read_sensors(self) -> Tuple[float, float, float, float, float, float]:
-        raw_rx = self.spi.xfer2([(REG_ACC_DATA_0 | 0x80), 0x00] + [0x00] * 12)
+    def read_sensors(self) -> Tuple[float, float, float, float, float, float, int]:
+        # 0x0C..0x17 = accel + gyro, 0x18..0x1A = sensor time. Reading all 15 bytes
+        # in one burst keeps each sample and its timestamp consistent.
+        raw_rx = self.spi.xfer2([(REG_ACC_DATA_0 | 0x80), 0x00] + [0x00] * 15)
         payload = bytes(raw_rx[2:])
 
-        ax_raw, ay_raw, az_raw, gx_raw, gy_raw, gz_raw = struct.unpack('<hhhhhh', payload)
+        ax_raw, ay_raw, az_raw, gx_raw, gy_raw, gz_raw = struct.unpack('<hhhhhh', payload[:12])
+        sensortime = int.from_bytes(payload[12:15], 'little')
 
         return (
             ax_raw * ACCEL_SCALE,
@@ -160,7 +169,8 @@ class BMI270Driver:
             az_raw * ACCEL_SCALE,
             gx_raw * GYRO_SCALE,
             gy_raw * GYRO_SCALE,
-            gz_raw * GYRO_SCALE
+            gz_raw * GYRO_SCALE,
+            sensortime,
         )
 
     def close(self):

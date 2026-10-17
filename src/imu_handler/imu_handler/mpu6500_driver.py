@@ -21,7 +21,9 @@ GYRO_SCALE = (2000.0 / 32768.0) * DEG_TO_RAD  # Adds a scale factor for +- 2000d
 
 
 class MPU6500Driver:
-
+    # NOTE: legacy driver. read_sensors() still returns 6 values and this sensor
+    # has no SENSORTIME clock. If the MPU-6500 is ever used again, update it to
+    # return (ax, ay, az, gx, gy, gz, None) so it matches the BMI270 interface.
     def __init__(self, bus: int = 0, cs: int = 0):
         self.spi = spidev.SpiDev()
         self.spi.open(bus, cs)

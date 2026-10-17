@@ -1,6 +1,8 @@
+from typing import Optional
 from geometry_msgs.msg import Vector3Stamped
 import rclpy
 from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import Imu
 
 from .mpu6500_driver import MPU6500Driver
@@ -14,6 +16,7 @@ IMU_REGISTRY = {
     #"bmi088": BMI088Driver,
 }
 
+TIME_OFFSET_ALPHA = 0.05
 
 class IMUNode(Node):
 
@@ -36,11 +39,18 @@ class IMUNode(Node):
         self.pub_accel = self.create_publisher(Vector3Stamped, '/imu/accel', 10)
         self.pub_gyro = self.create_publisher(Vector3Stamped, '/imu/gyro', 10)
 
-        self._init_driver()
+        self.prev_sensortime = None
+        self.total_ticks = 0
+        self.offset_ns = None
 
-        timer_period = 1.0 / max(self.rate_hz, 1.0)
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-        self.get_logger().info(f"IMU Node running at {self.rate_hz} Hz on frame '{self.frame_id}'")
+        self._init_driver()
+        polls_per_sample = 2.0 if self.driver.has_sensortime else 1.0
+        poll_period = 1.0 / (polls_per_sample * max(self.rate_hz, 1.0))
+        self.timer = self.create_timer(poll_period, self.timer_callback)
+        self.get_logger().info(
+            f"IMU Node polling at {polls_per_sample * max(self.rate_hz, 1.0)} Hz, "
+            f"publishing at {self.rate_hz} Hz on frame '{self.frame_id}'"
+        )
 
     def _init_driver(self):
         # Case 1: User specified the driver type
@@ -78,39 +88,68 @@ class IMUNode(Node):
 
     def timer_callback(self):
         try:
-            ax, ay, az, gx, gy, gz = self.driver.read_sensors()
-            now_stamp = self.get_clock().now().to_msg()
-
-            imu_msg = Imu()
-            imu_msg.header.stamp = now_stamp
-            imu_msg.header.frame_id = self.frame_id
-            imu_msg.linear_acceleration.x = float(ax)
-            imu_msg.linear_acceleration.y = float(ay)
-            imu_msg.linear_acceleration.z = float(az)
-            imu_msg.angular_velocity.x = float(gx)
-            imu_msg.angular_velocity.y = float(gy)
-            imu_msg.angular_velocity.z = float(gz)
-            imu_msg.orientation_covariance[0] = -1.0
-            self.pub_imu_raw.publish(imu_msg)
-
-            acc_msg = Vector3Stamped()
-            acc_msg.header.stamp = now_stamp
-            acc_msg.header.frame_id = self.frame_id
-            acc_msg.vector.x = float(ax)
-            acc_msg.vector.y = float(ay)
-            acc_msg.vector.z = float(az)
-            self.pub_accel.publish(acc_msg)
-
-            gyro_msg = Vector3Stamped()
-            gyro_msg.header.stamp = now_stamp
-            gyro_msg.header.frame_id = self.frame_id
-            gyro_msg.vector.x = float(gx)
-            gyro_msg.vector.y = float(gy)
-            gyro_msg.vector.z = float(gz)
-            self.pub_gyro.publish(gyro_msg)
-
+            ax, ay, az, gx, gy, gz, sensortime = self.driver.read_sensors()
         except Exception as e:
             self.get_logger().error(f'Error reading IMU: {e}', throttle_duration_sec=2.0)
+            return
+        
+        now_ns = self.get_clock().now().nanoseconds
+        stamp = self._make_stamp(sensortime, now_ns)
+        if stamp is None:
+            return # means that the sample was the same as the last read, waits for a new one
+
+        imu_msg = Imu()
+        imu_msg.header.stamp = stamp
+        imu_msg.header.frame_id = self.frame_id
+        imu_msg.linear_acceleration.x = float(ax)
+        imu_msg.linear_acceleration.y = float(ay)
+        imu_msg.linear_acceleration.z = float(az)
+        imu_msg.angular_velocity.x = float(gx)
+        imu_msg.angular_velocity.y = float(gy)
+        imu_msg.angular_velocity.z = float(gz)
+        imu_msg.orientation_covariance[0] = -1.0
+        self.pub_imu_raw.publish(imu_msg)
+
+        acc_msg = Vector3Stamped()
+        acc_msg.header.stamp = stamp
+        acc_msg.header.frame_id = self.frame_id
+        acc_msg.vector.x = float(ax)
+        acc_msg.vector.y = float(ay)
+        acc_msg.vector.z = float(az)
+        self.pub_accel.publish(acc_msg)
+
+        gyro_msg = Vector3Stamped()
+        gyro_msg.header.stamp = stamp
+        gyro_msg.header.frame_id = self.frame_id
+        gyro_msg.vector.x = float(gx)
+        gyro_msg.vector.y = float(gy)
+        gyro_msg.vector.z = float(gz)
+        self.pub_gyro.publish(gyro_msg)
+   
+    def _make_stamp(self, sensortime: Optional[int], now_ns: int):
+        """
+           Timestamp one IMU sample from the sensor's own clock.
+
+           sensortime : raw BMI270 SENSORTIME counter, or None if the driver has none
+           now_ns     : Pi clock in nanoseconds, captured right after the SPI read
+
+           Returns a builtin_interfaces/Time for the sample, or None if this read is a
+           duplicate of the sample already published.
+        """
+        if sensortime is None:
+            return Time(nanoseconds=now_ns).to_msg()
+        if sensortime == self.prev_sensortime:
+            return None
+        if self.prev_sensortime is not None and sensortime < self.prev_sensortime:
+            self.total_ticks += self.driver.sensortime_modulo
+        self.prev_sensortime = sensortime
+        sensor_ns = int((self.total_ticks + sensortime) * self.driver.sensortime_tick_ns)
+        measured_offset = now_ns - sensor_ns
+        if self.offset_ns is None:
+            self.offset_ns = measured_offset
+        else:
+            self.offset_ns += int((measured_offset - self.offset_ns) * TIME_OFFSET_ALPHA)
+        return Time(nanoseconds=sensor_ns + self.offset_ns).to_msg()
 
     def destroy_node(self):
         if hasattr(self, 'driver') and self.driver:
