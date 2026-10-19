@@ -130,15 +130,20 @@ class IMUNode(Node):
                 self.get_logger().debug(f'gpiochip{index}: cannot open ({e})')
                 continue
             try:
-                # lgpio returns [okay, lines, name, label] and
-                # [okay, gpio, flags, name, user], so index rather than unpack.
+                # lgpio returns [err, lines, name, label] and [err, gpio, flags,
+                # name, user]; err is 0 on success, so index rather than unpack.
                 chip_info = lgpio.gpio_get_chip_info(handle)
-                if not isinstance(chip_info, list) or not chip_info[0]:
+                if (not isinstance(chip_info, (list, tuple)) or len(chip_info) < 4
+                        or chip_info[0] != 0):
                     continue
                 n_lines, name, label = chip_info[1], chip_info[2], chip_info[3]
                 try:
                     line_info = lgpio.gpio_get_line_info(handle, self.int_gpio)
-                    line_name = line_info[3] if isinstance(line_info, list) else None
+                    if (isinstance(line_info, (list, tuple)) and len(line_info) >= 5
+                            and line_info[0] == 0):
+                        line_name = line_info[3]
+                    else:
+                        line_name = None
                 except Exception:
                     line_name = None
             finally:
