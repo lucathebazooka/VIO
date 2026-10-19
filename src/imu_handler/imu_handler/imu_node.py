@@ -108,12 +108,59 @@ class IMUNode(Node):
             f"Unknown imu_type '{self.imu_type}'. Supported IMUs: {supported}"
         )
 
+    def _open_gpiochip(self):
+        """Open the gpiochip that owns the 40-pin header.
+
+        On a Pi 5 the header lives on the RP1 (gpiochip4 with pinctrl-rp1 on the
+        kernel we tested), while gpiochip0-3 are BCM2712 internal peripherals whose
+        line 17 exists but is not a header pin. Pick the chip whose line name matches
+        the GPIO, then by label, then by line count, so a kernel renumbering does not
+        silently break the interrupt.
+        """
+        import glob
+        import lgpio
+
+        wanted = f'GPIO{self.int_gpio}'
+        chips = []
+        for path in sorted(glob.glob('/dev/gpiochip*')):
+            index = int(path.rsplit('gpiochip', 1)[1])
+            try:
+                handle = lgpio.gpiochip_open(index)
+            except Exception as e:
+                self.get_logger().debug(f'gpiochip{index}: cannot open ({e})')
+                continue
+            try:
+                n_lines, name, label = lgpio.gpio_get_chip_info(handle)
+                try:
+                    _, line_name, _ = lgpio.gpio_get_line_info(handle, self.int_gpio)
+                except Exception:
+                    line_name = None
+            finally:
+                lgpio.gpiochip_close(handle)
+            chips.append((index, n_lines, f'{name} {label}'.lower(), line_name))
+
+        if not chips:
+            raise RuntimeError('No usable gpiochip found for the interrupt pin')
+
+        chosen = next((c for c in chips if c[3] == wanted), None)
+        if chosen is None:
+            chosen = next((c for c in chips if 'rp1' in c[2]), None)
+        if chosen is None:
+            chosen = max(chips, key=lambda c: c[1])
+        if chosen[3] != wanted:
+            self.get_logger().warn(
+                f'No line named {wanted}; using gpiochip{chosen[0]} ({chosen[3]!r})'
+            )
+
+        self.get_logger().info(f'Using gpiochip{chosen[0]} for GPIO{self.int_gpio}')
+        return lgpio.gpiochip_open(chosen[0])
+
     def _start_interrupt_reader(self):
-        # Imported here so the timer path still works on a machine without lgpio.oh, its 
+        # Imported here so the timer path still runs on a machine without lgpio.
         import lgpio
 
         self._lgpio = lgpio
-        self._gpio = lgpio.gpiochip_open(0)
+        self._gpio = self._open_gpiochip()
         lgpio.gpio_claim_alert(
             self._gpio, self.int_gpio, lgpio.RISING_EDGE, lgpio.SET_PULL_NONE
         )
