@@ -130,9 +130,15 @@ class IMUNode(Node):
                 self.get_logger().debug(f'gpiochip{index}: cannot open ({e})')
                 continue
             try:
-                n_lines, name, label = lgpio.gpio_get_chip_info(handle)
+                # lgpio returns [okay, lines, name, label] and
+                # [okay, gpio, flags, name, user], so index rather than unpack.
+                chip_info = lgpio.gpio_get_chip_info(handle)
+                if not isinstance(chip_info, list) or not chip_info[0]:
+                    continue
+                n_lines, name, label = chip_info[1], chip_info[2], chip_info[3]
                 try:
-                    _, line_name, _ = lgpio.gpio_get_line_info(handle, self.int_gpio)
+                    line_info = lgpio.gpio_get_line_info(handle, self.int_gpio)
+                    line_name = line_info[3] if isinstance(line_info, list) else None
                 except Exception:
                     line_name = None
             finally:
@@ -174,7 +180,7 @@ class IMUNode(Node):
             f'(~{self.rate_hz} Hz expected) on frame {self.frame_id}'
         )
 
-    def _on_drdy_edge(self, chip, gpio, tick):
+    def _on_drdy_edge(self, chip, gpio, level, tick):
         # lgpio callback. One sample is ready, so read and publish it now
         self._publish_sample(self._read_sample())
 
