@@ -36,6 +36,16 @@ def generate_launch_description():
             default_value = '0',
             description = "SPI chip-select line the IMU is connected to",
         ),
+        DeclareLaunchArgument(
+            'imu_use_interrupt',
+            default_value = 'true',
+            description = 'Read the IMU on its data-ready interrupt instead of polling',
+        ),
+        DeclareLaunchArgument(
+            'imu_int_gpio',
+            default_value = '17',
+            description = 'BCM GPIO number the IMU INT1 line is wired to',
+        ),
 
         #Camera
         DeclareLaunchArgument(
@@ -116,6 +126,8 @@ def generate_launch_description():
                 'rate_hz': ParameterValue(LaunchConfiguration('imu_rate'), value_type = float),
                 'bus': ParameterValue(LaunchConfiguration('imu_bus'), value_type = int),
                 'cs': ParameterValue(LaunchConfiguration('imu_cs'), value_type = int),
+                'use_interrupt': ParameterValue(LaunchConfiguration('imu_use_interrupt'), value_type = bool),
+                'int_gpio': ParameterValue(LaunchConfiguration('imu_int_gpio'), value_type = int),
                 'frame_id': 'imu_link',
             }],
             output = 'screen',

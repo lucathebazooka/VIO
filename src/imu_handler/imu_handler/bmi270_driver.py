@@ -1,6 +1,6 @@
 import struct
 import time
-from typing import Tuple
+from typing import Tuple, Optional
 import os
 import re
 
@@ -27,6 +27,13 @@ REG_INIT_DATA = 0x5E
 REG_PWR_CONF = 0x7C        # Power save modes
 REG_PWR_CTRL = 0x7D        # Sensor power enable
 REG_CMD = 0x7E             # Soft reset command
+
+REG_INT1_IO_CTRL = 0x53    # INT1 pin behaviour
+REG_INT_MAP_DATA = 0x58    # Which interrupts are routed to INT1/INT2
+
+REG_STATUS = 0x03
+REG_DRDY_ACC = 0x80
+REG_DRDY_GYR = 0x40
 
 G_TO_MS2 = 9.80665  # 1g = 9.80665 m/s^2
 DEG_TO_RAD = 0.017453292519943295  # 1 degree = pi/180 radians
@@ -154,12 +161,22 @@ class BMI270Driver:
         # Disable auto power save mode
         self._write_register(REG_PWR_CONF, 0x00)
 
-    def read_sensors(self) -> Tuple[float, float, float, float, float, float, int]:
+        # Route the data-ready interrupt to INT1 so the Pi can be edge-driven instead
+        # of polled. 0x0A = output enable | active high | push-pull | non-latched.
+        self._write_register(REG_INT1_IO_CTRL, 0x0A)
+        self._write_register(REG_INT_MAP_DATA, 0x04)   # bit 2 = DRDY on INT1
+
+    def read_sensors(self) -> Optional[Tuple[float, float, float, float, float, float, int]]:
+        # Asks sensor whether new reading is attached
+        # Data reading blow clears these flags, so this must come first
+        status = self._read_register(REG_STATUS)
+        if not (status & REG_DRDY_ACC) or not (status & REG_DRDY_GYR):
+            return None
+
         # 0x0C..0x17 = accel + gyro, 0x18..0x1A = sensor time. Reading all 15 bytes
         # in one burst keeps each sample and its timestamp consistent.
         raw_rx = self.spi.xfer2([(REG_ACC_DATA_0 | 0x80), 0x00] + [0x00] * 15)
         payload = bytes(raw_rx[2:])
-
         ax_raw, ay_raw, az_raw, gx_raw, gy_raw, gz_raw = struct.unpack('<hhhhhh', payload[:12])
         sensortime = int.from_bytes(payload[12:15], 'little')
 
