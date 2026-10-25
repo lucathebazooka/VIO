@@ -17,7 +17,7 @@ class StereoCameraNode(Node):
         self.declare_parameter('width', 2560)
         self.declare_parameter('height', 800)
         self.declare_parameter('capture_fps', 60)
-        self.declare_parameter('publish_fps', 20)
+        self.declare_parameter('publish_fps', 30)
         self.declare_parameter('frame_id_left', 'camera_left_optical_frame')
         self.declare_parameter('frame_id_right', 'camera_right_optical_frame')
         self.declare_parameter('camera_info_url', '')
