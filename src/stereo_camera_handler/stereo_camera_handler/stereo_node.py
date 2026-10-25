@@ -1,8 +1,12 @@
-import rclpy
-from rclpy.node import Node 
-from sensor_msgs.msg import Image, CameraInfo
-from cv_bridge import CvBridge 
+import time
+
 import cv2
+import numpy as np
+import rclpy
+from cv_bridge import CvBridge
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Image, CameraInfo
 
 class StereoCameraNode(Node):
     def __init__(self):
@@ -28,20 +32,23 @@ class StereoCameraNode(Node):
         self.frame_id_right = self.get_parameter('frame_id_right').value
         camera_info_url = self.get_parameter('camera_info_url').value
 
-        # Capture at capture_fps and publish only every Nth frame, so publish_fps
-        # must divide capture_fps evenly (60 -> 20, 30 or 60).
-        if publish_fps <= 0 or capture_fps % publish_fps != 0:
-            raise ValueError(
-                f'publish_fps ({publish_fps}) must be a positive divisor of '
-                f'capture_fps ({capture_fps}), e.g. capture 60 -> publish 20/30/60'
-            )
-        self.publish_divisor = capture_fps // publish_fps
+        # The camera only offers fixed frame rates, so publish_fps is a software
+        # cap rather than a divisor: publish at most once per publish_period.
+        if publish_fps <= 0:
+            raise ValueError(f'publish_fps ({publish_fps}) must be positive')
+        self.publish_period = 1.0 / publish_fps
 
         # Create publishers
-        self.left_pub = self.create_publisher(Image, '/camera/left/image_raw', 10)
-        self.right_pub = self.create_publisher(Image, '/camera/right/image_raw', 10)
-        self.left_info_pub = self.create_publisher(CameraInfo, '/camera/left/camera_info', 10)
-        self.right_info_pub = self.create_publisher(CameraInfo, '/camera/right/camera_info', 10)
+        # Best-effort (sensor data) QoS: a subscriber that cannot keep up drops
+        # frames instead of blocking publish() and dragging the capture loop down.
+        self.left_pub = self.create_publisher(
+            Image, '/camera/left/image_raw', qos_profile_sensor_data)
+        self.right_pub = self.create_publisher(
+            Image, '/camera/right/image_raw', qos_profile_sensor_data)
+        self.left_info_pub = self.create_publisher(
+            CameraInfo, '/camera/left/camera_info', qos_profile_sensor_data)
+        self.right_info_pub = self.create_publisher(
+            CameraInfo, '/camera/right/camera_info', qos_profile_sensor_data)
 
         self.bridge = CvBridge()
 
@@ -58,6 +65,9 @@ class StereoCameraNode(Node):
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.cap.set(cv2.CAP_PROP_FPS, capture_fps)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) #minimal latency, drops old frames
+        # Hand back the compressed MJPG bytes instead of a decoded BGR image, so a
+        # frame we skip costs a buffer copy rather than a full JPEG decode.
+        self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)
 
         # Verify
         fourcc_int = int(self.cap.get(cv2.CAP_PROP_FOURCC))
@@ -89,10 +99,13 @@ class StereoCameraNode(Node):
                 f'Actual buffersize: {actual_buffersize}, does not equal requested buffersize: 1 (may increase latency)'
                 )
 
-        self.frame_count = 0
+        # Time of the last publish, measured with time.monotonic(): a clock that
+        # never jumps, so an NTP correction cannot make the gate misbehave.
+        self.last_publish = 0.0
         self.get_logger().info(
-            f'Publishing every {self.publish_divisor} frame(s) '
-            f'(~{publish_fps} FPS from {actual_fps} FPS capture)'
+            f'Publishing at most {publish_fps} FPS '
+            f'({self.publish_period * 1e3:.0f} ms gate); camera reports '
+            f'{actual_fps} FPS capture'
         )
 
     def run(self):
@@ -102,22 +115,32 @@ class StereoCameraNode(Node):
 
 
     def capture_once(self):
-        ret, frame = self.cap.read()
-        if not ret or frame is None:
+        # CONVERT_RGB=0: cap.read() returns the compressed MJPG bytes, not an
+        # image, so skipping a frame costs one buffer copy instead of a decode.
+        ret, buf = self.cap.read()
+        # Stamp at capture, before the gate and before decoding: decode time would
+        # otherwise land in the timestamp and make it depend on CPU load.
+        now_stamp = self.get_clock().now().to_msg()
+        if not ret or buf is None:
             self.get_logger().error('Error reading Camera: failed to grab frame', throttle_duration_sec=2.0)
             return
-        now_stamp = self.get_clock().now().to_msg()
-        should_publish = (self.frame_count % self.publish_divisor) == 0
-        self.frame_count += 1
-        if not should_publish:
+
+        now = time.monotonic()
+        if now - self.last_publish < self.publish_period:
+            return  # too soon - this frame is dropped without being decoded
+        self.last_publish = now
+
+        # Decode straight to mono8: no BGR intermediate and no cvtColor pass.
+        gray = cv2.imdecode(buf, cv2.IMREAD_GRAYSCALE)
+        if gray is None:
+            self.get_logger().error('Error decoding MJPG frame', throttle_duration_sec=2.0)
             return
-        half = frame.shape[1] // 2
-        left = frame[:,:half]
-        right = frame[:,half:]
-        left_gray = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
-        right_gray = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
-        left_msg = self.bridge.cv2_to_imgmsg(left_gray, encoding='mono8')
-        right_msg = self.bridge.cv2_to_imgmsg(right_gray, encoding='mono8')
+
+        # Slicing columns leaves a non-contiguous view (row stride is still the
+        # full width), so make a contiguous copy for cv_bridge.
+        half = gray.shape[1] // 2
+        left_msg = self.bridge.cv2_to_imgmsg(np.ascontiguousarray(gray[:, :half]), encoding='mono8')
+        right_msg = self.bridge.cv2_to_imgmsg(np.ascontiguousarray(gray[:, half:]), encoding='mono8')
 
         left_msg.header.stamp = now_stamp
         left_msg.header.frame_id = self.frame_id_left
