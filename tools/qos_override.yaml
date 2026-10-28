@@ -1,0 +1,31 @@
+# QoS overrides for:
+#   ros2 bag record ... --qos-profile-overrides-path qos_override.yaml
+#
+# stereo_node publishes the image topics with qos_profile_sensor_data
+# (best_effort), while `ros2 bag record` defaults to reliable. Those two are
+# incompatible, so the recorder must ask for best_effort to match.
+#
+# depth = how many samples the subscription queue holds before the oldest is
+# dropped. Images are large and stale images are useless, so keep it shallow.
+
+/camera/left/image_raw:
+  reliability: best_effort
+  history: keep_last
+  depth: 10
+  durability: volatile
+
+/camera/right/image_raw:
+  reliability: best_effort
+  history: keep_last
+  depth: 10
+  durability: volatile
+
+# imu_node publishes reliable. Uncomment for the combined camera+IMU bag:
+# depth 400 is ~2 s at 200 Hz, so a brief stall in the writer loses no IMU
+# samples (missing IMU is unrecoverable for the Phase 5 fit, missing images
+# are not).
+# /imu/data_raw:
+#   reliability: reliable
+#   history: keep_last
+#   depth: 400
+#   durability: volatile
