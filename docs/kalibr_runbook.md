@@ -33,10 +33,19 @@ Two properties of the image that every command below depends on:
 
 ```bash
 docker pull prehensile/kalibr:arm64        # ~1.17 GB, single arch linux/arm64
+docker build -t kalibr-vio:arm64 docker/kalibr   # + one fix, one layer, seconds
 ```
 
 Do **not** run `./build.sh` unless you actually need to patch Kalibr: the build wants
 12 GB+ RAM *inside the Docker VM*, which on a 16 GB Mac means starving macOS.
+
+`docker/kalibr/Dockerfile` is not that build — it is one extra layer on the pulled image
+that patches a single function, `CameraIntializers.stereoCalibrate`. The stock version takes
+the median of its per-view baselines with `np.median(np.asmatrix(r), axis=0)`, and this
+image's numpy 1.17 raises `non-broadcastable output operand with shape (1,3)` whenever a
+single view's PnP left a NaN — i.e. one blurry frame out of 771 kills the whole run. The
+patch averages only the finite rows. Phase 3 and 5 use `kalibr-vio:arm64`; the utility calls
+(target PDF, `rosbag info`) are identical on either tag.
 
 ### 0.2 Docker VM memory
 
@@ -317,8 +326,10 @@ Expect: two image topics at ~30 Hz, `/imu/data_raw` at ~200 Hz, no other topics.
 ```bash
 cd ~/kalibr/w
 
-docker run --rm -it -v "$PWD:/data" -e MPLBACKEND=Agg prehensile/kalibr:arm64 \
-  xvfb-run -a rosrun kalibr kalibr_calibrate_cameras \
+# stdin carries the focal seed -- see the bullets
+printf '483\n' | docker run --rm -i -v "$PWD:/data" -e MPLBACKEND=Agg \
+  -e MPLCONFIGDIR=/tmp/mpl kalibr-vio:arm64 \
+  rosrun kalibr kalibr_calibrate_cameras \
     --bag /data/cam_calib.bag \
     --topics /camera/left/image_raw /camera/right/image_raw \
     --models pinhole-radtan pinhole-radtan \
@@ -331,8 +342,20 @@ docker run --rm -it -v "$PWD:/data" -e MPLBACKEND=Agg prehensile/kalibr:arm64 \
   selected). 3× less work, no accuracy loss.
 * `--models`: keep `pinhole-radtan` as in your notes. If the residual at the frame edges
   is systematically worse than the centre, rerun with `pinhole-equi`.
-* `xvfb-run -a` + `MPLBACKEND=Agg`: exits cleanly with no X11 quay. Omit both only if you
-  have XQuartz and want the plots.
+* **No `xvfb-run`.** With `MPLBACKEND=Agg` and no `--plot` / `--show-extraction` Kalibr
+  never opens a display, and `xvfb-run` occasionally wedges inside Docker waiting for
+  Xvfb's `SIGUSR1` readiness signal: the container sits at 0 % CPU with only `Xvfb`
+  running, Kalibr never starts, and nothing is printed. `-i` (not `-it`) is there for the
+  focal seed below.
+* **The focal seed on stdin.** The image sets `KALIBR_MANUAL_FOCAL_LENGTH_INIT=1`, so when
+  `initializeIntrinsics()` finds no usable guess it *prompts on stdin* (and reads
+  `2.08e-315` from closed stdin, leaving the projection `[nan nan nan nan]`). That happens
+  when no recorded view holds a **complete** 6×6 grid — the initialiser skips any image with
+  a missing corner, and at 640×400 a 255 mm board only fits the 400 px height from ~0.33 m
+  out, which a 0.20–0.25 m bag need never contain. Seed it with a plausible `fx` (~480 for
+  this lens/resolution, or the other camera's converged value); it only has to sit in the
+  right basin. A `RuntimeError: stereo initialisation: no view produced a finite pose pair`
+  is the downstream symptom of getting this wrong.
 * No `--output` flag exists — results go next to the bag.
 
 Outputs: `cam_calib-camchain.yaml` (the one you keep), `-report-cam.pdf`, `-results-cam.txt`.
@@ -349,8 +372,9 @@ Needs Phase 3 (`camchain`) and Phase 4 (Allan-variance `imu.yaml`) first.
 ```bash
 cd ~/kalibr/w
 
-docker run --rm -it -v "$PWD:/data" -e MPLBACKEND=Agg prehensile/kalibr:arm64 \
-  xvfb-run -a rosrun kalibr kalibr_calibrate_imu_camera \
+docker run --rm -v "$PWD:/data" -e MPLBACKEND=Agg -e MPLCONFIGDIR=/tmp/mpl \
+  kalibr-vio:arm64 \
+  rosrun kalibr kalibr_calibrate_imu_camera \
     --bag /data/imu_cam.bag \
     --cams /data/cam_calib-camchain.yaml \
     --imu /data/imu.yaml \
@@ -406,6 +430,9 @@ there, or `docker save prehensile/kalibr:arm64 | gzip > kalibr.tar.gz` (~1.17 GB
 | --- | --- |
 | `exec: kalibr_...: not found` / exit 127 | the `kalibr_*` scripts are not on `PATH` in this image — prefix with `rosrun kalibr`. |
 | run "succeeds" but no output file appears | the entrypoint `cd /catkin_ws` overrode `-w`; pass an absolute `/data/...` output path. |
+| container alive, 0 % CPU, no output at all | `xvfb-run` wedged waiting for Xvfb's readiness signal — drop it, `MPLBACKEND=Agg` is enough. |
+| `Initializing focal length to 2.08e-315`, projection `[nan …]` | no complete-grid view, so the prompt read closed stdin — pipe a focal seed (`printf '483\n' | docker run -i …`). |
+| `ValueError: non-broadcastable output operand … (1,3) … (3,3)` | stock image's numpy 1.17 chokes on one NaN pose — use `kalibr-vio:arm64`. |
 | `rosbag info` shows extra topics | recovery used `--exclude-topic` incompletely; re-run with `--include-topic`. |
 | no images shown / "no views" | target yaml `/data` path typo, or target not detected — re-check `tagSize` against the **measured span / 7.5**, and that the *whole* grid was visible. |
 | tags detected but RMS > 1 px, both cameras | display scaling or a glossy reflection: verify native 1080p, page-fit (not fill), no glare on the panel. |
