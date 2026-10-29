@@ -70,13 +70,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'camera_capture_fps',
-            default_value = '60',
+            default_value = '30',
             description = 'Frame rate the stereo camera captures with in hz',
         ),
         DeclareLaunchArgument(
             'camera_publish_fps',
-            default_value = '60',
-            description = 'Maximum frame rate the stereo camera publishes with in hz',
+            default_value = '35',
+            description = 'Maximum frame rate the stereo camera publishes with in hz (cap, keep above the achieved rate)',
         ),
         DeclareLaunchArgument(
             'camera_frame_left',
