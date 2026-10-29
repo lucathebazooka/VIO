@@ -95,6 +95,12 @@ edge to tag edge and divide by 7.5, or measure to the ink and divide by 8.1 — 
 inflates `tagSize` by 8 %, which inflates every translation in the result by 8 % with no visible
 symptom. Cross-check against the side of one single tag: it equals `tagSize` to ~1 %.
 
+**And the axis arrows count too.** The red/green axes sit outside the ink at the bottom-left, with
+their tails at `1.5 × tagSpacing × tagSize` = `0.45 × tagSize` from the grid origin — `0.15 ×
+tagSize` beyond the ink. So "everything I can see on screen" spans `8.25 × tagSize`. Three
+divisors, three landmarks: **7.5** tag edges, **8.1** black ink, **8.25** ink + axis tails. A
+one-noticeable-object mix-up is a silent 1–10 % scale error in every translation.
+
 ```yaml
 # ~/kalibr/w/april_6x6.yaml
 target_type: 'aprilgrid'
@@ -114,9 +120,10 @@ failure.
 Why the geometry works out:
 
 ```
-tag span = tagCols*tagSize + (tagCols-1)*tagSpacing*tagSize = 7.5 * tagSize
-ink span = tag span + 2*tagSpacing*tagSize                  = 8.1 * tagSize
-=> tagSize = measured_span / (7.5 for tag edges, 8.1 for ink)
+tag span  = tagCols*tagSize + (tagCols-1)*tagSpacing*tagSize = 7.5 * tagSize
+ink span  = tag span + 2*tagSpacing*tagSize                  = 8.1 * tagSize
+axis span = ink span + tagSpacing*tagSize/2                  = 8.25 * tagSize   (arrow tails)
+=> tagSize = measured_span / (7.5, 8.1 or 8.25 — whichever landmark you measured to)
 ```
 
 A 24" 16:9 panel is ~531 x 299 mm of active area, so a square grid tops out at 299 mm and
