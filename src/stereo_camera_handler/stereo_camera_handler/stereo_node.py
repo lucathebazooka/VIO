@@ -16,12 +16,15 @@ class StereoCameraNode(Node):
         self.declare_parameter('video_device', 0)
         self.declare_parameter('width', 1280)
         self.declare_parameter('height', 400)
-        self.declare_parameter('capture_fps', 30)
-        # The gate must sit ABOVE the rate the camera actually achieves (~29.2 Hz
-        # at 1280x400), not on it: a period within one frame interval of the real
-        # one rejects every second frame and halves the published rate. 30 FPS
-        # would leave 0.9 ms of margin against a 34.2 ms frame interval; 35 FPS
-        # leaves ~6 ms.
+        # 1280x400 advertises a single interval (60 fps), so this is "pick the
+        # mode", not a rate the sensor sustains: in dim light the camera slows
+        # itself to ~29 fps by taking a longer exposure per frame.
+        self.declare_parameter('capture_fps', 60)
+        # The gate must sit ABOVE the rate actually achieved (~29.2 Hz), not on
+        # it: a period within one frame interval of the real one rejects every
+        # second frame and halves the published rate. 30 FPS would leave 0.9 ms
+        # of margin against a 34.2 ms interval; 35 leaves ~6 ms, and still caps a
+        # full-rate 60 fps stream to 35.
         self.declare_parameter('publish_fps', 35)
         self.declare_parameter('frame_id_left', 'camera_left_optical_frame')
         self.declare_parameter('frame_id_right', 'camera_right_optical_frame')

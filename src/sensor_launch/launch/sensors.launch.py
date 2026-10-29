@@ -70,8 +70,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'camera_capture_fps',
-            default_value = '30',
-            description = 'Frame rate the stereo camera captures with in hz',
+            default_value = '60',
+            description = 'Frame interval requested from the camera in hz (the 1280x400 mode only advertises 60)',
         ),
         DeclareLaunchArgument(
             'camera_publish_fps',
