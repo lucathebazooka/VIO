@@ -223,8 +223,8 @@ frames, so bags run several GB).
 
 ```bash
 # on the Mac
-scp -r pi@192.168.2.2:~/bags/cam_calib ~/kalibr/w/
-scp -r pi@192.168.2.2:~/bags/imu_cam  ~/kalibr/w/
+scp -r pi@192.168.2.4:~/bags/cam_calib ~/kalibr/w/
+scp -r pi@192.168.2.4:~/bags/imu_cam  ~/kalibr/w/
 
 # integrity, on both machines
 (cd ~/kalibr/w && find cam_calib imu_cam -type f -print0 | sort -z | xargs -0 cat | shasum -a 256)

@@ -16,7 +16,7 @@
 - **Workspace Boundary**: Strictly limit file edits and operations to the current workspace directory (`/home/pi`).
 
 ## Raspberry Pi SSH Access
-- ssh pi@192.168.2.2
+- ssh pi@192.168.2.4
 - **Password**: `admin`
 
 ## Code Quality & Architecture
