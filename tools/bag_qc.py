@@ -56,7 +56,9 @@ HOLE_FAIL_NS = 500_000_000  # a 0.5 s hole means something really stalled
 # counts above start going up.
 LAG_DRIFT_WARN_NS = 50_000_000
 
-EXPECTED_IMAGE = {'width': 1280, 'height': 800, 'encoding': 'mono8'}
+EXPECTED_IMAGE = {'width': 640, 'height': 400, 'encoding': 'mono8'}
+WANT_IMAGE = (f"{EXPECTED_IMAGE['width']}x{EXPECTED_IMAGE['height']} "
+              f"{EXPECTED_IMAGE['encoding']} step={EXPECTED_IMAGE['width']}")
 
 OK, WARN, FAIL = 'OK', 'WARN', 'FAIL'
 
@@ -254,9 +256,9 @@ def inspect(bag):
                or e != EXPECTED_IMAGE['encoding'] or s != w]
         if bad:
             checks.append(Check('geometry', FAIL,
-                                f'{" | ".join(bad)} -- want 1280x800 mono8 step=1280'))
+                                f'{" | ".join(bad)} -- want {WANT_IMAGE}'))
         else:
-            checks.append(Check('geometry', OK, '1280x800 mono8, step 1280, both eyes'))
+            checks.append(Check('geometry', OK, f'{WANT_IMAGE}, both eyes'))
 
     # --- 5. stereo stamp parity --------------------------------------------
     # Both eyes are stamped from one clock read in stereo_node, so their stamps

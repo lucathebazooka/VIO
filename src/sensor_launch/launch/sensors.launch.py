@@ -60,12 +60,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'camera_width',
-            default_value = '2560',
+            default_value = '1280',
             description = 'Width in pixels of combined stereo frame',
         ),
         DeclareLaunchArgument(
             'camera_height',
-            default_value = '800',
+            default_value = '400',
             description = 'Height in pixels of combined stereo frame',
         ),
         DeclareLaunchArgument(
