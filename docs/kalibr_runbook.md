@@ -86,27 +86,37 @@ Display checklist — each item is a way to quietly ruin the bag:
   unrecoverable and invisible in Kalibr's output until detection fails.
 
 Then measure the **outer** grid span with a ruler or calipers — outermost tag edge to outermost tag
-edge (left-to-right or top-to-bottom, they are equal) — and write:
+edge (left-to-right or top-to-bottom, they are equal).
+
+**Watch the corner squares.** The generator also draws a `tagSpacing × tagSize` square at every tag
+corner, so the outermost *black ink* sticks out `0.3 × tagSize` past each tag edge: the ink spans
+`(7.5 + 2·0.3) × tagSize = 8.1 × tagSize`, while the tag edges span `7.5 × tagSize`. Measure tag
+edge to tag edge and divide by 7.5, or measure to the ink and divide by 8.1 — mixing the two
+inflates `tagSize` by 8 %, which inflates every translation in the result by 8 % with no visible
+symptom. Cross-check against the side of one single tag: it equals `tagSize` to ~1 %.
 
 ```yaml
 # ~/kalibr/w/april_6x6.yaml
 target_type: 'aprilgrid'
 tagCols: 6
 tagRows: 6
-tagSize: 0.0398     # metres — MEASURED span / 7.5, do not trust the nominal value
+tagSize: 0.0398     # metres — measured span / 7.5 (tag edges) or / 8.1 (ink); never the nominal
 tagSpacing: 0.3     # gap as a fraction of tagSize
 ```
 
-The `0.0398` above assumes the grid spans the panel's full 299 mm. The generated PDF page is
-~331 mm square around a ~299 mm grid (it includes the corner squares and the axis arrows), so
-**page-fit** display on this panel yields a ~270 mm span => measure and write `~0.036` unless you
-scale the viewer up to make the grid fill the screen.
+The `0.0398` above assumes the tag span covers the panel's full 299 mm. The generated PDF page is
+~331 mm square (it includes the corner squares and the axis arrows), so **page-fit** on a 295 mm
+tall panel puts ~266 mm across the tag edges and ~288 mm across the ink => ~0.0355 by either
+divisor, which is exactly what the cross-check is for. Scale the viewer up only if every tag stays
+clear of the panel edge; a clipped corner square or tag corner is an unrecoverable detection
+failure.
 
 Why the geometry works out:
 
 ```
-span    = tagCols*tagSize + (tagCols-1)*tagSpacing*tagSize = 7.5 * tagSize
-=> tagSize = measured_span / 7.5
+tag span = tagCols*tagSize + (tagCols-1)*tagSpacing*tagSize = 7.5 * tagSize
+ink span = tag span + 2*tagSpacing*tagSize                  = 8.1 * tagSize
+=> tagSize = measured_span / (7.5 for tag edges, 8.1 for ink)
 ```
 
 A 24" 16:9 panel is ~531 x 299 mm of active area, so a square grid tops out at 299 mm and
@@ -146,7 +156,8 @@ for motion blur; there is no free lunch, so pick the shortest exposure that show
 ### 1.3 The A0 print (cross-check only, deferred)
 
 If a print happens later: matte paper, A0, 100 %/"actual size", glued to MDF or aluminium composite
-(not foam board — warp is a systematic error), `tagSize = measured_span / 7.5 ≈ 0.10667`. Re-run
+(not foam board — warp is a systematic error), `tagSize = measured_span / 7.5 ≈ 0.10667` (same
+`/7.5` vs `/8.1` caveat as above). Re-run
 Phase 3 against it and require `fx`/`fy` to agree within ~0.5 % of the monitor result — agreement
 validates both targets, disagreement means a scale error in one of the two yamls.
 
