@@ -441,4 +441,4 @@ there, or `docker save prehensile/kalibr:arm64 | gzip > kalibr.tar.gz` (~1.17 GB
 | `timeshift_cam_imu` at the padding edge | raise `--timeoffset-padding`; if it keeps growing, your camera stamping is drifting. |
 | Linux OOM-killer / container dies | Docker VM memory (step 0.2). |
 | Output files owned by root | add `--user "$(id -u):$(id -g)"` to `docker run`. |
-| matplotlib backend crash | keep `-e MPLBACKEND=Agg` and the `xvfb-run -a` prefix. |
+| matplotlib backend crash | keep `-e MPLBACKEND=Agg` (and `-e MPLCONFIGDIR=/tmp/mpl` if it cannot write `~/.config`). |
