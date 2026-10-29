@@ -21,3 +21,6 @@ __pycache__/
 
 # Unfinished Notes Files
 notes_luca.md
+# Recorded bags land in bags/ on the Pi; only the recording config is tracked
+bags/*
+!bags/qos_override.yaml
