@@ -41,6 +41,11 @@ SHORT = {
     '/imu/data_raw': 'imu',
 }
 
+# Phase 3 needs only the two images; the IMU is optional (a camera-only bag is a
+# legitimate input to kalibr_calibrate_cameras) and only becomes mandatory for
+# the Phase 5 camera-IMU fit.
+REQUIRED_TOPICS = ('/camera/left/image_raw', '/camera/right/image_raw')
+
 # A rate outside +/-RATE_TOL is a health flag, not a calibration verdict:
 # kalibr_calibrate_cameras runs with --bag-freq 10.0, so it discards two of every
 # three frames on purpose. Below RATE_FAIL_RATIO of expected, the bag is unusable.
@@ -228,14 +233,17 @@ def inspect(bag):
         duration_s = reader.duration / 1e9
 
     # --- 1. topic inventory ------------------------------------------------
-    missing = [t for t in EXPECTED_HZ if not samples.get(t)]
+    missing = [t for t in REQUIRED_TOPICS if not samples.get(t)]
     unexpected = [t for t in found if t not in EXPECTED_HZ]
     if missing:
         checks.append(Check(
             'topics', FAIL,
             f'missing {", ".join(missing)} -- nothing to calibrate'))
     else:
-        checks.append(Check('topics', OK, ' '.join(samples)))
+        detail = ' '.join(t for t, pairs in samples.items() if pairs)
+        if not samples.get('/imu/data_raw'):
+            detail += ' (camera-only: fine for Phase 3, not for Phase 5)'
+        checks.append(Check('topics', OK, detail))
     if unexpected:
         # Survivable (rosbags-convert filters by --include-topic) but it means
         # someone used `ros2 bag record -a`, which inflates the transfer.
