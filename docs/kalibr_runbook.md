@@ -2,7 +2,7 @@
 
 Run Kalibr on the MacBook Air M5. Record bags on the Pi. The image is pulled from
 Docker Hub — **there is no build step**. All flags below were checked against
-`kalibr/master` sources and `rosbags` 0.9.23, not from memory; the `rosrun` prefixes and
+`kalibr/master` sources and `rosbags` 0.11.9, not from memory; the `rosrun` prefixes and
 `/data` output paths were checked against `prehensile/kalibr:arm64` itself.
 
 Working dir on the Mac (outside git — bags are multi-GB):
@@ -52,13 +52,20 @@ If lower: Docker Desktop → Settings → Resources → Memory → 10–12 GB �
 
 ### 0.3 rosbags (bag conversion, no ROS install needed)
 
+**Python 3.10+ is required.** Jazzy writes rosbag2 metadata **version 9**, and the last
+rosbags that supports Python 3.9 (macOS's `/usr/bin/python3`) is 0.9.23, which rejects that
+with `Rosbag2 version 9 not supported`. Use a Homebrew interpreter:
+
 ```bash
-python3 -m venv ~/venvs/rosbags
-~/venvs/rosbags/bin/pip install -U rosbags
+brew install python@3.12
+/opt/homebrew/opt/python@3.12/bin/python3.12 -m venv ~/venvs/rosbags
+~/venvs/rosbags/bin/pip install -U pip rosbags      # 0.11.x
 ~/venvs/rosbags/bin/rosbags-convert --help
 ```
 
-Pure Python — deliberately used *instead of* running ROS 1 on the Mac.
+Pure Python — deliberately used *instead of* running ROS 1 on the Mac. Note the 0.10+ CLI
+change: `--src` is a required flag now, and `--include-topic` takes all its values after a
+single flag (see §4).
 
 ---
 
@@ -283,13 +290,16 @@ Kalibr for `kalibr_calibrate_imu_camera` needs **only** `/imu/data_raw`; the
 cd ~/kalibr/w
 RB=~/venvs/rosbags/bin/rosbags-convert
 
-$RB cam_calib --dst cam_calib.bag \
-  --include-topic /camera/left/image_raw --include-topic /camera/right/image_raw
+# rosbags 0.10+: --src is a flag, and one --include-topic takes all the topics
+$RB --src cam_calib --dst cam_calib.bag \
+  --include-topic /camera/left/image_raw /camera/right/image_raw
 
-$RB imu_cam --dst imu_cam.bag \
-  --include-topic /camera/left/image_raw --include-topic /camera/right/image_raw \
-  --include-topic /imu/data_raw
+$RB --src imu_cam --dst imu_cam.bag \
+  --include-topic /camera/left/image_raw /camera/right/image_raw /imu/data_raw
 ```
+
+A `.bag` destination selects the ROS 1 writer (`bag v2.0`); any other suffix writes a
+ROS 2 bag. `--dst-storage`/`--dst-version` only apply to the ROS 2 direction.
 
 Sanity check before spending CPU on calibration:
 
