@@ -24,3 +24,6 @@ notes_luca.md
 # Recorded bags land in bags/ on the Pi; only the recording config is tracked
 bags/*
 !bags/qos_override.yaml
+
+# Third-party phase-4 tool, cloned on the Pi in 6.1 (build dependency, not ours)
+src/allan_variance_ros/
