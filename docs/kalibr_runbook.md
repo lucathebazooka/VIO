@@ -413,7 +413,122 @@ superseded but kept for reference.
 
 ---
 
-## 6. Phase 5 — camera–IMU extrinsics + time offset
+## 6. Phase 4 — IMU noise (Allan variance)
+
+Produces the four numbers Kalibr and OpenVINS need — gyro/accel noise density and random
+walk — by leaving the IMU perfectly still for hours and watching how the variance of the
+average grows with averaging time: white noise averages away (slope −1/2), bias random walk
+does not (slope +1/2), and the flat minimum between them is the bias instability.
+
+`allan_variance_ros` (the ROS 2 port) reads rosbag2 directly, so **no ROS 1 conversion** on
+this phase: record, trim, compute, done.
+
+### 6.1 Build (once)
+
+`gcc` ships with the Pi image, **`g++` does not**. Without it `colcon` dies with
+`CMake Error ... No CMAKE_CXX_COMPILER could be found`, which reads like a ROS problem and
+is not:
+
+```bash
+sudo apt-get install -y g++ python3-matplotlib python3-scipy
+cd ~/ros2_ws/src
+git clone --depth 1 https://github.com/cwha0212/allan_variance_ros2.git allan_variance_ros
+cd ~/ros2_ws && colcon build --packages-select allan_variance_ros && source install/setup.bash
+```
+
+The repo is named `...ros2` but the **package** is `allan_variance_ros` — that is the name
+in `ros2 run`. Verified to build in 34 s on Jazzy / Pi 5 (2026-10-30).
+
+### 6.2 Record (hours, unattended)
+
+The IMU block in `tools/qos_override.yaml` must be **active** (it is, by default): `depth 400`
+is 2 s at 200 Hz, where the rosbag2 default of 10 is 50 ms — over 11 hours one writer stall
+at depth 10 silently drops samples, and missing IMU cannot be reconstructed.
+
+Do **not** wait 30 min for thermal equilibrium before pressing record; record while the rig
+warms up and cut it out afterwards (§6.3). Two reasons: the wait is dead time, and starting
+early captures the drift you want to *exclude*, which is easier than guessing when it ended.
+
+Run it in `tmux` — an SSH drop must not kill an overnight recording:
+
+```bash
+tmux new -s allan
+cd ~/ros2_ws && source install/setup.bash
+ros2 launch sensor_launch sensors.launch.py launch_imu:=true launch_foxglove:=false
+# second pane (Ctrl-B then % to split):
+ros2 bag record -o ~/ros2_ws/bags/imu_static /imu/data_raw \
+  --qos-profile-overrides-path ~/ros2_ws/bags/qos_override.yaml
+# Ctrl-B D detaches;  tmux attach -t allan  gets you back
+```
+
+Clock it: 200 Hz x ~400 B/msg is ~0.3 GB/h, so 11 h ≈ 3.3 GB — check `df -h ~` first, and
+remember the trimmed copy needs room too (§6.3). Leave the rig in its final enclosure, lid
+on, mains powered, on a surface nothing will bump.
+
+### 6.3 Trim the stationary window
+
+rosbag2 has no trim command, and `ros2 bag play --rate` + re-record would rewrite the very
+timestamps the analysis reads. `tools/trim_bag.py` copies the window out and copies message
+bytes unchanged (raw CDR, no deserialise), so `header.stamp` is bit-exact:
+
+```bash
+# raw bag -> Mac (the rosbags venv lives there), trim, trimmed bag -> Pi, drop the raw
+scp -r pi@192.168.2.4:~/ros2_ws/bags/imu_static ~/kalibr/w/
+~/venvs/rosbags/bin/python tools/trim_bag.py \
+  ~/kalibr/w/imu_static ~/kalibr/w/imu_static_trim --skip 1800 --tail 300
+scp -r ~/kalibr/w/imu_static_trim pi@192.168.2.4:~/ros2_ws/bags/
+rm -rf ~/kalibr/w/imu_static                       # archived; the Pi copy too
+```
+
+`--skip 1800` drops the 30 min warm-up, `--tail 300` drops the last 5 min (you walking over
+to stop it). Both are non-stationary and inflate the long-cluster deviation — exactly the
+region the bias-instability number is read from.
+
+### 6.4 Run
+
+The config must match the *trimmed* bag: `imu_rate` is the real publish rate and
+`sequence_time` is the analysed length, because the tool counts messages rather than reading
+stamps (`imu_counter / imu_rate > sequence_time` ends the run). See `tools/allan_imu.yaml`.
+
+```bash
+mkdir -p ~/allan && cd ~/allan
+source /opt/ros/jazzy/setup.bash && source ~/ros2_ws/install/setup.bash
+ros2 run allan_variance_ros allan_variance \
+  ~/ros2_ws/bags/imu_static_trim ~/ros2_ws/tools/allan_imu.yaml
+MPLBACKEND=Agg ros2 run allan_variance_ros analysis.py \
+  --data allan_variance.csv --config ~/ros2_ws/tools/allan_imu.yaml
+```
+
+Outputs in `~/allan`: `allan_variance.csv`, `acceleration.png`, `gyro.png`, and the thing we
+actually want, **`imu.yaml`**. Copy the lot to the Mac (`acceleration.png`/`gyro.png` are the
+plots; `MPLBACKEND=Agg` means `plt.waitforbuttonpress` returns immediately and saves instead
+of waiting for a click).
+
+### 6.5 What good looks like
+
+On both plots: a straight −1/2 slope at short τ, then a minimum, then a +1/2 rise. The
+fitted lines (magenta = white noise, yellow = random walk) should track the curves over their
+respective regions. Numbers for an MPU-6500-class part land near:
+
+| quantity | Kalibr key | plausible | suspicious |
+|---|---|---|---|
+| gyro noise density | `gyroscope_noise_density` | 1e-4–5e-4 rad/s/√Hz | > 1e-3 (or < 1e-5) |
+| gyro random walk | `gyroscope_random_walk` | 1e-6–1e-5 rad/s²/√Hz | > 1e-4 |
+| accel noise density | `accelerometer_noise_density` | 1e-3–1e-2 m/s²/√Hz | > 1e-1 |
+| accel random walk | `accelerometer_random_walk` | 1e-5–1e-4 m/s³/√Hz | > 1e-3 |
+
+An order of magnitude outside those ranges is a hardware finding, not an analysis bug (this
+is the cloned-MPU-6500 failure mode: it would show up here first). Check the two last lines
+of `imu.yaml` too — `rostopic: '/imu/data_raw'` and `update_rate: 200` must be right, since
+Kalibr and OpenVINS read them.
+
+As your notes say, keep the raw numbers and plan **10–20× inflation** when tuning VIO: Allan
+variance measures the sensor on a bench, and a hovering quadcopter feeds it a far nastier
+signal.
+
+---
+
+## 7. Phase 5 — camera–IMU extrinsics + time offset
 
 Needs Phase 3 (`camchain`) and Phase 4 (Allan-variance `imu.yaml`) first.
 
@@ -459,7 +574,7 @@ residuals white and within ~3σ, estimated biases small and stable.
 
 ---
 
-## 7. Repeat cost (why the Mac)
+## 8. Repeat cost (why the Mac)
 
 A full Phase 5 run on this data is minutes on the M5 vs. hours on the Pi 5, where 8 GB is
 also shared with the ROS 2 stack — and calibration is inherently iterative (window choice,
@@ -472,12 +587,14 @@ there, or `docker save prehensile/kalibr:arm64 | gzip > kalibr.tar.gz` (~1.17 GB
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | symptom | cause / fix |
 | --- | --- |
 | `exec: kalibr_...: not found` / exit 127 | the `kalibr_*` scripts are not on `PATH` in this image — prefix with `rosrun kalibr`. |
 | run "succeeds" but no output file appears | the entrypoint `cd /catkin_ws` overrode `-w`; pass an absolute `/data/...` output path. |
+| `No CMAKE_CXX_COMPILER could be found` | `gcc` is installed but `g++` is not — `sudo apt-get install -y g++`. |
+| `analysis.py` IndexError on `np.where(period == 10)` | the CSV has no τ = 10 s, i.e. the analysed sequence was too short for the long clusters — usually `sequence_time` disagreeing with the bag. |
 | container alive, 0 % CPU, no output at all | `xvfb-run` wedged waiting for Xvfb's readiness signal — drop it, `MPLBACKEND=Agg` is enough. |
 | `Initializing focal length to 2.08e-315`, projection `[nan …]` | no complete-grid view, so the prompt read closed stdin — pipe a focal seed (`printf '483\n' | docker run -i …`). |
 | `ValueError: non-broadcastable output operand … (1,3) … (3,3)` | stock image's numpy 1.17 chokes on one NaN pose — use `kalibr-vio:arm64`. |

@@ -1,0 +1,15 @@
+# Config for allan_variance_ros (ROS 2 port) -- Phase 4, IMU noise characterisation.
+#
+#   ros2 run allan_variance_ros allan_variance <bag_dir> <this_file>
+#   MPLBACKEND=Agg ros2 run allan_variance_ros analysis.py --data allan_variance.csv --config <this_file>
+#
+# All three numbers below are load-bearing: the tool converts between messages and
+# seconds with `imu_counter / imu_rate` and subsamples every
+# `imu_rate / measure_rate` messages. It never looks at timestamps to decide where
+# the sequence ends, so a wrong imu_rate silently analyses the wrong window, and
+# `sequence_time` must be the length of the *trimmed* bag.
+
+imu_topic: "/imu/data_raw"
+imu_rate: 200          # actual publish rate of imu_node (Hz)
+measure_rate: 100      # subsample to 100 Hz before clustering -- halves the work
+sequence_time: 37500   # seconds analysed: 10 h 25 m = 11 h minus 30 min warm-up minus 5 min tail
