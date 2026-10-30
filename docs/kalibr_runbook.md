@@ -366,10 +366,12 @@ plots look like noise, not structure. Rerun with a different `--bag-from-to` win
 **One camera much worse than the other is optics, not the model.** Run
 `~/venvs/rosbags/bin/python tools/eye_sharpness.py ~/kalibr/w/cam_calib`: it compares the two
 eyes on the same frames, so exposure and motion cancel, and separates contrast from focus
-(`sharp` = edge strength / contrast, `hf` = share of energy above 1/4 Nyquist). On the
-2026-10-29 bag the right eye held **0.26×** the left's high-frequency energy and its residual
-was 0.64 px against 0.14 px — a lens-focus asymmetry that no `--models` choice can fix, and
-the same number will come back on every rerun.
+(`sharp` = edge strength / contrast, `hf` = share of energy above 1/4 Nyquist). Two runs agree
+to three digits: the right eye holds **0.26×** the left's high-frequency energy, residual
+0.64 px against 0.14 px (run 1), then 0.256× and 0.55 px against 0.12 px (run 2, after
+cleaning both lenses — total sharpness rose on *both* eyes, the ratio did not move). A ratio
+that is stable across a cleaning is optical focus, not contamination, and no `--models` choice
+or `--bag-from-to` window can fix it.
 
 ---
 
