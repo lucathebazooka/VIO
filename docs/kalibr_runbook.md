@@ -248,6 +248,33 @@ ros2 bag record -o imu_cam \
 
 Record only these topics. Every extra topic inflates the transfer and breaks the converter.
 
+### 2.1 Camera focus — set it once, at the distance you fly at
+
+Both barrels of this module are threaded and focus independently, and they leave the
+factory set to different distances. That asymmetry is invisible in a bag (the QC passes,
+the images look plausible) and shows up only as a **2–4× reprojection gap between the two
+cameras** in phase 3 — plus ~4× less high-frequency energy on the soft eye
+(`tools/eye_sharpness.py`). Cleaning the lenses does not move it.
+
+Focus at the **middle of your working range, not at the calibration distance**: intrinsics
+barely depend on focus, but every flight frame does. At 1.45 mm focal length and ~f/2 the
+depth of field is enormous, and blur is roughly `0.35 · |1/s − 1/s₀|` px (`s` = object,
+`s₀` = focus), so:
+
+| focus `s₀` | 0.25 m | 0.5 m | 1 m | 3 m | ∞ |
+|-----------|--------|-------|-----|-----|----|
+| 0.25 m | 0 | 0.7 | 1.05 | 1.3 | 1.4 |
+| 0.35 m | 0.4 | 0.5 | 0.65 | 0.9 | 1.0 |
+| **0.50 m** | **0.7** | **0** | **0.35** | **0.6** | **0.7** |
+| 1.00 m | 1.05 | 0.35 | 0 | 0.25 | 0.35 |
+
+0.5 m keeps the whole 0.25 m→infinity range under 0.7 px. Procedure: measure 0.5 m to a
+detailed surface, open the live view at full resolution (`launch_foxglove:=true`), turn one
+barrel until tag/edge transitions are a single crisp step, repeat on the **same surface at
+the same distance** for the other eye (matched blur matters as much as low blur), then
+tighten the locking screws and re-check — they shift focus slightly. Verify with a 10 s bag
+at 0.5 m: `hf` right/left should be 0.9–1.1, not 0.25.
+
 ---
 
 ## 3. Transfer to the Mac
@@ -366,12 +393,23 @@ plots look like noise, not structure. Rerun with a different `--bag-from-to` win
 **One camera much worse than the other is optics, not the model.** Run
 `~/venvs/rosbags/bin/python tools/eye_sharpness.py ~/kalibr/w/cam_calib`: it compares the two
 eyes on the same frames, so exposure and motion cancel, and separates contrast from focus
-(`sharp` = edge strength / contrast, `hf` = share of energy above 1/4 Nyquist). Two runs agree
-to three digits: the right eye holds **0.26×** the left's high-frequency energy, residual
-0.64 px against 0.14 px (run 1), then 0.256× and 0.55 px against 0.12 px (run 2, after
-cleaning both lenses — total sharpness rose on *both* eyes, the ratio did not move). A ratio
-that is stable across a cleaning is optical focus, not contamination, and no `--models` choice
-or `--bag-from-to` window can fix it.
+(`sharp` = edge strength / contrast, `hf` = share of energy above 1/4 Nyquist). Three runs on
+the same rig, same target:
+
+| run | `hf` right/left | left resid | right resid |
+|-----|-----------------|-----------|-------------|
+| 1 | 0.257 | 0.140 px | 0.643 px |
+| 2 (lenses cleaned) | 0.256 | 0.117 px | 0.547 px |
+| 3 (barrels refocused at 0.5 m) | **0.958** | 0.101 px | 0.102 px |
+
+Cleaning raised sharpness on *both* eyes and left the ratio frozen to three digits: that is
+optical focus, not contamination. Refocusing the right barrel took the gap from 4.6× to 1.02×
+and the residual from 0.64 to 0.10 px. No `--models` choice or `--bag-from-to` window can
+substitute for this — check it **before** burning a calibration run (see §2.1).
+
+Current keeper: **`cam_calib3-camchain.yaml`** (run 3, 874 images, left 482.93/482.89 px,
+right 481.91/481.62 px, baseline 64.46 mm, residuals 0.101 / 0.102 px). Runs 1 and 2 are
+superseded but kept for reference.
 
 ---
 
